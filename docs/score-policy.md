@@ -1,4 +1,4 @@
-# Score policy 1.0.0
+# Score policy 1.1.0
 
 A score describes observed static signals. It cannot certify security, provenance,
 correctness, maintainership, or whether a human wrote the code.
@@ -18,9 +18,36 @@ Health, maintainability, history and parser structure remain visible information
 evidence and do not add duplicate weight.
 
 Required stages that are missing, failed, timed out, limited, unsupported or
-skipped make the headline score **unknown**. An `ok` stage with invalid scoring
+skipped keep the strict score **unknown**. An `ok` stage with invalid scoring
 metrics also makes it unknown. A quick profile exposes omitted stages; its score
 applies only to its declared scope. Compare like profiles and tool versions.
+
+## Provisional observed score
+
+Incomplete scans also show an **observed score**. Only `ok` stages with validated
+scoring metrics contribute. Take the lowest contributing stage score per category,
+then weight the contributing categories once. A category with another incomplete
+required stage is explicitly listed as partial. Missing or failed measurements
+contribute neither a clean score nor a zero. No usable measurement means no score.
+
+The receipt includes `assessment.observed`: its score/grade/categories,
+`contributing_weight`, `applicable_weight`, `partial_categories`,
+`contributing_stages`, and `excluded_stages`. Applicable weight includes categories
+selected by that profile; it is not always 100. Stage coverage and weight coverage
+are separate: a category can have some validated measurements while another
+required stage in it is incomplete. Check both before comparing results.
+
+Example: validated lint 75 (weight 15) and complexity 85 (weight 20), with types
+unavailable (weight 20), give `(75×15 + 85×20)/35 = 80.71`. Measured category weight
+is 35/55. That **provisional B** helps focus review; it does not approve a merge,
+assert complete evidence, or replace the strict score used by CI. Known blockers
+also cap observed scores at 20. A change in contributing scope is not evidence of
+a code-quality improvement.
+
+Positively identified binary assets are outside source/text analysis. The scope
+manifest lists their paths, sizes, classification and reasons. Unknown, unreadable
+or omitted possible source remains a required evidence gap. Binary analysis and
+archive contents are not certified by this static text scan.
 
 Known critical findings, CC >50, duplication >60%, or no observed license file
 produce **hold**. If a complete numeric score exists, cap it at 20 (F). Missing

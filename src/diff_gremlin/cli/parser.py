@@ -32,7 +32,7 @@ def common_options(parser, *, profile="full"):
         "--format",
         choices=("text", "markdown", "json"),
         default="text",
-        help="report format; JSON stdout contains only JSON",
+        help="text/markdown show top findings; JSON contains every finding and scope path",
     )
     parser.add_argument(
         "--timeout",

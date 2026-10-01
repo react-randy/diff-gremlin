@@ -62,7 +62,10 @@ diff-gremlin pr https://github.com/OWNER/REPO/pull/123 --format markdown
 diff-gremlin check . --format json > receipt.json
 ```
 
-Text is the default. Markdown is suitable for a review artifact. JSON stdout
+Text is the default. Text and Markdown prioritize the top 20 findings and top 10
+next actions, with total counts and an explicit note for additional observations.
+JSON retains every finding, next action, and source-scope path. Markdown is suitable
+for a review artifact. JSON stdout
 contains only JSON on successful report creation; operational errors go to stderr
 and may produce no receipt. Save the process exit status as well as the document.
 
@@ -71,6 +74,14 @@ coverage, stages, assessment, and limitations. Each stage names its tool/version
 status, analyzed/eligible file counts, located findings, metrics, and limitation
 reason. A comparison contains the two scan receipts and their deltas. Consumers
 should check schema/profile/coverage and preserve unknown evidence.
+
+Schema 1.1.0 adds `assessment.observed`, a provisional score from validated checks,
+including contributing/applicable category weights and partial categories. The
+original `assessment.score` remains null unless required evidence is complete;
+existing CI gates use that strict field. Ordinary images and binary archives are
+listed as outside text analysis in `inventory.metrics.scope_manifest`; omitted
+possible source remains a coverage gap. No target dependency installation is needed
+to receive the findings that static checks can actually observe.
 
 ## CI gates
 
@@ -114,7 +125,7 @@ URL access explicitly, supply an already-exported token without writing its valu
 in the command:
 
 ```sh
-docker run --rm -e GH_TOKEN ghcr.io/react-randy/diff-gremlin:1.0.1 \
+docker run --rm -e GH_TOKEN ghcr.io/react-randy/diff-gremlin:1.0.2 \
   pr https://github.com/OWNER/PRIVATE_REPO/pull/123
 ```
 

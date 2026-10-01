@@ -55,7 +55,7 @@ def installer_fixture(tmp_path, *, corrupt_wheel=False):
     assets = tmp_path / "assets"
     assets.mkdir()
     wheel = b"owned wheel verification fixture"
-    wheel_name = "diff_gremlin-1.0.1-py3-none-any.whl"
+    wheel_name = "diff_gremlin-1.0.2-py3-none-any.whl"
     (assets / wheel_name).write_bytes(wheel + b"corrupt" if corrupt_wheel else wheel)
     (assets / "full-requirements.txt").write_text("# owned requirements fixture\n")
     provisioner = "import pathlib,sys\npathlib.Path(sys.argv[1], 'gitleaks').write_text('fixture')\n"
@@ -107,7 +107,7 @@ elif a[:2] == ['tool','install']:
     p=pathlib.Path(os.environ['UV_TOOL_DIR'])/'diff-gremlin'/'bin'; p.mkdir(parents=True)
     (p/'python').symlink_to(sys.executable)
     b=pathlib.Path(os.environ['UV_TOOL_BIN_DIR']); b.mkdir()
-    entry=b/'diff-gremlin'; entry.write_text('#!/bin/sh\\necho "diff-gremlin 1.0.1"\\n'); entry.chmod(0o755)
+    entry=b/'diff-gremlin'; entry.write_text('#!/bin/sh\\necho "diff-gremlin 1.0.2"\\n'); entry.chmod(0o755)
 elif a[:2] == ['tool','dir']:
     print(os.environ['UV_TOOL_BIN_DIR'] if '--bin' in a else os.environ['UV_TOOL_DIR'])
 elif a[:2] == ['pip','install']:
@@ -208,17 +208,17 @@ def test_gitleaks_archive_links_are_rejected():
 
 def wheel_fixture(tmp_path, *, missing_asset=False):
     release = load_script("prepare_release")
-    wheel = tmp_path / "diff_gremlin-1.0.1-py3-none-any.whl"
+    wheel = tmp_path / "diff_gremlin-1.0.2-py3-none-any.whl"
     with zipfile.ZipFile(wheel, "w") as archive:
         archive.writestr(
-            "diff_gremlin-1.0.1.dist-info/METADATA",
-            "Name: diff-gremlin\nVersion: 1.0.1\n",
+            "diff_gremlin-1.0.2.dist-info/METADATA",
+            "Name: diff-gremlin\nVersion: 1.0.2\n",
         )
         archive.writestr(
-            "diff_gremlin-1.0.1.dist-info/entry_points.txt",
+            "diff_gremlin-1.0.2.dist-info/entry_points.txt",
             "[console_scripts]\ndiff-gremlin = diff_gremlin.cli.main:main\n",
         )
-        archive.writestr("diff_gremlin-1.0.1.dist-info/licenses/LICENSE", "MIT fixture")
+        archive.writestr("diff_gremlin-1.0.2.dist-info/licenses/LICENSE", "MIT fixture")
         for name in release.ASSETS[:-1] if missing_asset else release.ASSETS:
             archive.writestr(name, "controlled nonempty asset")
     return release, wheel

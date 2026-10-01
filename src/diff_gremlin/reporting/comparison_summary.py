@@ -9,8 +9,15 @@ def score(value: float | None) -> str:
 
 def receipt_summary(receipt: dict) -> str:
     assessment, coverage = receipt["assessment"], receipt["coverage"]
+    label = score(assessment["score"])
+    observed = assessment.get("observed")
+    if assessment["score"] is None and observed is not None:
+        label = (
+            f"observed {score(observed['score'])} · provisional · "
+            f"measured category weight {observed['contributing_weight']}/{observed['applicable_weight']} · strict score unknown"
+        )
     return (
-        f"{score(assessment['score'])} · {assessment['decision']} · "
+        f"{label} · {assessment['decision']} · "
         f"{coverage['completed_stages']}/{coverage['required_stages']} required stages · "
         f"{receipt['profile']} profile"
     )

@@ -1,6 +1,6 @@
 # Reviewed toolchain
 
-Diff Gremlin 1.0.1 uses static analyzers without target installation or builds.
+Diff Gremlin 1.0.2 uses static analyzers without target installation or builds.
 Pins were reviewed on 2026-10-01, using packages available before 2026-09-24.
 The package needs no model API or model-specific configuration.
 

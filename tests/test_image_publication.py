@@ -38,7 +38,7 @@ def context():
 def release():
     return {
         "id": 123,
-        "tag_name": "v1.0.1",
+        "tag_name": "v1.0.2",
         "draft": False,
         "prerelease": False,
         "published_at": "2026-10-01T00:00:00Z",
@@ -98,19 +98,19 @@ def test_unpublished_or_different_release_cannot_publish(release, field, value):
 
 
 def test_dispatch_requires_main_and_fixed_tag(context, release):
-    event = {"inputs": {"tag": "v1.0.1"}}
+    event = {"inputs": {"tag": "v1.0.2"}}
     identity.validate_event(context, event, release)
     context["GITHUB_REF"] = "refs/heads/unreviewed"
     with pytest.raises(ValueError, match="from main"):
         identity.validate_event(context, event, release)
     context["GITHUB_REF"] = "refs/heads/main"
-    event["inputs"]["tag"] = "v1.0.1; touch should-not-run"
-    with pytest.raises(ValueError, match=r"name v1\.0\.1"):
+    event["inputs"]["tag"] = "v1.0.2; touch should-not-run"
+    with pytest.raises(ValueError, match=r"name v1\.0\.2"):
         identity.validate_event(context, event, release)
 
 
 def test_release_event_requires_current_published_identity(context, release):
-    context.update(GITHUB_EVENT_NAME="release", GITHUB_REF="refs/tags/v1.0.1")
+    context.update(GITHUB_EVENT_NAME="release", GITHUB_REF="refs/tags/v1.0.2")
     event = {"action": "published", "release": dict(release)}
     identity.validate_event(context, event, release)
     event["release"]["id"] += 1
@@ -284,7 +284,7 @@ def test_guard_resolves_live_identity_and_writes_only_fixed_outputs(
     tmp_path, monkeypatch, context, release
 ):
     event_path = tmp_path / "event.json"
-    event_path.write_text(json.dumps({"inputs": {"tag": "v1.0.1"}}))
+    event_path.write_text(json.dumps({"inputs": {"tag": "v1.0.2"}}))
     output_path = tmp_path / "output"
     for key, value in context.items():
         monkeypatch.setenv(key, value)
@@ -297,13 +297,13 @@ def test_guard_resolves_live_identity_and_writes_only_fixed_outputs(
             "private": False,
             "default_branch": "main",
         },
-        "releases/tags/v1.0.1": release,
-        "commits/v1.0.1": {"sha": SOURCE},
+        "releases/tags/v1.0.2": release,
+        "commits/v1.0.2": {"sha": SOURCE},
         "commits/main": {"sha": SOURCE},
     }
     monkeypatch.setattr(identity, "github_metadata", metadata.__getitem__)
     identity.guard(SOURCE)
-    assert output_path.read_text() == f"sha={SOURCE}\nversion=1.0.1\nrelease_id=123\n"
+    assert output_path.read_text() == f"sha={SOURCE}\nversion=1.0.2\nrelease_id=123\n"
     with pytest.raises(ValueError, match="identity changed during run"):
         identity.guard(SOURCE, "124")
 

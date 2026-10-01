@@ -56,7 +56,7 @@ def validate_event(context: dict, event: dict, release: dict) -> None:
         require(
             context["GITHUB_REF"] == "refs/heads/main", "Dispatch must run from main"
         )
-        require(event.get("inputs", {}).get("tag") == TAG, "Dispatch must name v1.0.1")
+        require(event.get("inputs", {}).get("tag") == TAG, "Dispatch must name v1.0.2")
         return
     require(event_name == "release", "Unsupported publication event")
     require(event.get("action") == "published", "Release event must be published")
