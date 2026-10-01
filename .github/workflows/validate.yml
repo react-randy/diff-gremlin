@@ -24,6 +24,7 @@ jobs:
       - name: Install reviewed Node analyzers without lifecycle scripts
         run: |
           npm --prefix toolchain/node ci --ignore-scripts --no-audit --no-fund
+          echo "$PWD/toolchain/node/node_modules/.bin" >> "$GITHUB_PATH"
           echo "DIFF_GREMLIN_TOOL_PATH=$PWD/toolchain/node/node_modules/.bin:$(dirname "$(command -v node)"):$JAVA_HOME/bin" >> "$GITHUB_ENV"
       - name: Install locked development wheels
         run: uv sync --locked --extra full --no-install-project --no-build --python 3.12.12
