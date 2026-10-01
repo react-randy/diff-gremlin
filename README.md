@@ -11,10 +11,10 @@ you evidence. No model or API key required. It cannot guess who wrote your code.
 
 ## Install
 
-Install the pinned v1.0.0 release:
+Install the pinned v1.0.1 release:
 
 ```sh
-curl -fsSL https://github.com/react-randy/diff-gremlin/releases/download/v1.0.0/install.sh | sh
+curl -fsSL https://github.com/react-randy/diff-gremlin/releases/download/v1.0.1/install.sh | sh
 diff-gremlin doctor
 ```
 
@@ -26,7 +26,7 @@ manual installation, and uninstall](docs/installation.md).
 **Full toolchain, one command:** Python, TypeScript/JavaScript, Java, Shell, and secrets.
 
 ```sh
-docker run --rm ghcr.io/react-randy/diff-gremlin:1.0.0 pr https://github.com/OWNER/REPO/pull/123
+docker run --rm ghcr.io/react-randy/diff-gremlin:1.0.1 pr https://github.com/OWNER/REPO/pull/123
 ```
 
 For local code, mount the repo read-only:
@@ -35,7 +35,7 @@ For local code, mount the repo read-only:
 docker run --rm --read-only --cap-drop=ALL --security-opt=no-new-privileges \
   --network=none --tmpfs /tmp:rw,nosuid,nodev,size=1g \
   --mount "type=bind,src=$PWD,dst=/workspace,readonly" \
-  ghcr.io/react-randy/diff-gremlin:1.0.0 check /workspace
+  ghcr.io/react-randy/diff-gremlin:1.0.1 check /workspace
 ```
 
 ## Review a change

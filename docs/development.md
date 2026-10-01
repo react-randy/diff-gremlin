@@ -77,16 +77,16 @@ verifies shipped analyzer assets, and freezes the resulting wheel bytes. Run:
 
 ```sh
 uv build --wheel --require-hashes --build-constraints toolchain/python/build-requirements.txt
-python3 scripts/prepare_release.py dist/diff_gremlin-1.0.0-py3-none-any.whl
+python3 scripts/prepare_release.py dist/diff_gremlin-1.0.1-py3-none-any.whl
 ```
 
 The preparation script verifies package identity/required assets, fills the
 installer's fixed wheel SHA, and stages only public release assets under
-`dist/release/`. It never publishes. Upload that directory to the owned v1.0.0
+`dist/release/`. It never publishes. Upload that directory to the owned v1.0.1
 GitHub release only after full CI, independent review, installer end-to-end tests,
 and platform claims match the evidence. The release has these assets:
 
-- `diff_gremlin-1.0.0-py3-none-any.whl`
+- `diff_gremlin-1.0.1-py3-none-any.whl`
 - `install.sh`
 - `core-requirements.txt`, `full-requirements.txt`
 - `provision_gitleaks.py`
@@ -94,7 +94,7 @@ and platform claims match the evidence. The release has these assets:
 - `SHA256SUMS`
 
 Publish the separately validated full image as
-`ghcr.io/react-randy/diff-gremlin:1.0.0`, retaining its immutable digest in the release
+`ghcr.io/react-randy/diff-gremlin:1.0.1`, retaining its immutable digest in the release
 record. Preserve both Linux architectures only after their native tests pass.
 The publication workflow runs release helpers as modules from the trusted checkout
 root (`python3 -m scripts.image_publication`). It requires the published stable
