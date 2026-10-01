@@ -27,7 +27,7 @@ const inherited = {
   const installedRequire = createRequire(path.join(eslintPath, 'package.json'));
   const recommended = installedRequire('@eslint/js').configs.recommended.rules;
   const javascriptRules = Object.fromEntries(Object.entries(inherited).filter(([name]) => !name.startsWith('@typescript-eslint/')));
-  Object.assign(javascriptRules, {'no-unused-vars': 'error', 'no-shadow': 'error', 'no-redeclare': 'error', 'no-dupe-class-members': 'error'});
+  Object.assign(javascriptRules, {'no-unused-vars': 'error', 'no-shadow': 'error', 'no-redeclare': 'error', 'no-dupe-class-members': 'error', 'no-undef': 'error'});
   const eslint = new ESLint({cwd: process.cwd(), overrideConfigFile: true, ignore: false, allowInlineConfig: false,
     overrideConfig: [{files: ['**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}'],
       languageOptions: {parser, ecmaVersion: 'latest', sourceType: 'module',

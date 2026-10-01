@@ -26,6 +26,8 @@ from diff_gremlin.domain.stages import StageResult
 
 _ID, _LABEL = "javascript.duplication.jscpd", "JavaScript/TypeScript duplication"
 _LIMITS = {"minLines": 5, "minTokens": 50, "maxLines": 1000, "maxSize": "100kb"}
+_MAX_REPORT_BYTES = 4 * 1024 * 1024
+_MAX_SOURCE_BYTES = 100 * 1024
 
 
 def _percentage(total: dict) -> float:
@@ -96,16 +98,55 @@ def _source_ids(statistics: dict, expected: set[str]) -> set[str]:
     return identities
 
 
-def _clone_location(location: object, paths: dict[str, str]) -> Finding:
+def _source_lengths(name: str) -> tuple[int, ...]:
+    with Path(name).open("rb") as stream:
+        contents = stream.read(_MAX_SOURCE_BYTES + 1)
+    if len(contents) > _MAX_SOURCE_BYTES:
+        raise ValueError("clone source exceeds native file size limit")
+    # Native tokenizer columns count UTF-16 units; only LF advances its line counter.
+    lines = contents.decode("utf-8", errors="replace").split("\n")
+    return tuple(len(line.encode("utf-16-le")) // 2 for line in lines)
+
+
+def _clone_point(point: object, line: int, lengths: tuple[int, ...]) -> dict:
+    if (
+        not isinstance(point, dict)
+        or not positive(point.get("line"))
+        or point.get("line") != line
+    ):
+        raise ValueError("clone endpoint differs from reported line")
+    if not positive(point.get("column")) or not natural(point.get("position")):
+        raise ValueError("invalid clone endpoint")
+    if point["column"] > lengths[line - 1] + 1:
+        raise ValueError("clone column outside source line")
+    return point
+
+
+def _clone_range(location: dict, lengths: tuple[int, ...]) -> None:
+    start, end = location.get("start"), location.get("end")
+    if (
+        not positive(start)
+        or not positive(end)
+        or not 1 <= start <= end <= len(lengths)
+    ):
+        raise ValueError("clone range outside source lines")
+    first = _clone_point(location.get("startLoc"), start, lengths)
+    last = _clone_point(location.get("endLoc"), end, lengths)
+    if (start, first["column"]) > (end, last["column"]):
+        raise ValueError("reversed clone endpoints")
+    if first["position"] > last["position"]:
+        raise ValueError("reversed native clone positions")
+
+
+def _clone_location(
+    location: object, paths: dict[str, str], lengths: dict[str, tuple[int, ...]]
+) -> Finding:
     if not isinstance(location, dict) or not isinstance(location.get("name"), str):
         raise TypeError("invalid clone location")
     name = location["name"]
-    if (
-        name not in paths
-        or not Path(name).is_file()
-        or not positive(location.get("start"))
-    ):
+    if name not in paths:
         raise ValueError("clone location outside analyzed files")
+    _clone_range(location, lengths[name])
     return Finding(
         "duplication.clone",
         "Duplicated block; review both clone locations",
@@ -118,18 +159,26 @@ def _clone_location(location: object, paths: dict[str, str]) -> Finding:
 
 def _clones(rows: list, paths: dict[str, str]) -> list[Finding]:
     findings = []
+    lengths = {name: _source_lengths(name) for name in paths} if rows else {}
     for row in rows:
-        if not isinstance(row, dict) or not natural(row.get("lines")):
+        if not isinstance(row, dict) or not positive(row.get("lines")):
             raise ValueError("invalid clone record")
         findings.extend(
-            _clone_location(row.get(side), paths)
+            _clone_location(row.get(side), paths, lengths)
             for side in ("firstFile", "secondFile")
         )
+        first = row["firstFile"]
+        if row["lines"] != first["end"] - first["start"] + 1:
+            raise ValueError("clone extent differs from first source range")
     return findings
 
 
 def _report_data(report_path: Path, expected: set[str], invocation: str):
-    data = json.loads(report_path.read_text(encoding="utf-8"))
+    with report_path.open("rb") as stream:
+        contents = stream.read(_MAX_REPORT_BYTES + 1)
+    if len(contents) > _MAX_REPORT_BYTES:
+        raise ValueError("duplication report exceeds evidence size limit")
+    data = json.loads(contents)
     if not isinstance(data, dict) or not isinstance(data.get("statistics"), dict):
         raise TypeError("missing duplication statistics")
     if data.get("invocation") != invocation or data.get("options") != _LIMITS:

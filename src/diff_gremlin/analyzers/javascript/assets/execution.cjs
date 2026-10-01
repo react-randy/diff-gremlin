@@ -80,7 +80,7 @@ function memberExpressionName(node, context) {
   return '';
 }
 function transparentExpression(node) {
-  return ts.isParenthesizedExpression(node) || ts.isAsExpression(node) || ts.isNonNullExpression(node);
+  return ts.isParenthesizedExpression(node) || ts.isAsExpression(node) || ts.isNonNullExpression(node) || ts.isTypeAssertionExpression(node) || ts.isSatisfiesExpression(node);
 }
 function expressionName(node, context) {
   if (!node) return '';
@@ -146,9 +146,15 @@ function observeCall(node, context) {
   const location = context.tree.getLineAndCharacterOfPosition(node.getStart(context.tree));
   findings.push({path: context.file, line: location.line + 1, column: location.character + 1, rule, severity});
 }
+function deferredInitializer(node) {
+  const owner = node.parent;
+  return owner && ts.isPropertyDeclaration(owner) && owner.initializer === node &&
+    !owner.modifiers?.some(modifier => modifier.kind === ts.SyntaxKind.StaticKeyword);
+}
 function visitCalls(node, context) {
-  // An uncalled function's writes cannot change another lexical owner's observations.
-  const nested = ts.isFunctionLike(node) ? {...context, bindings: new Map(context.bindings)} : context;
+  // Deferred function/instance initialization writes belong to their own owner.
+  // Computed field names and static initializers run during class evaluation.
+  const nested = ts.isFunctionLike(node) || deferredInitializer(node) ? {...context, bindings: new Map(context.bindings)} : context;
   if (ts.isCallExpression(node) || ts.isNewExpression(node)) observeCall(node, nested);
   ts.forEachChild(node, child => visitCalls(child, nested));
   updateBinding(node, nested);

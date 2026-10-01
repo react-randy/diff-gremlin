@@ -1,7 +1,7 @@
 # Diff Gremlin controlled Gitleaks rules, upstream MIT.
 # Source: https://github.com/gitleaks/gitleaks/blob/83d9cd684c87d95d656c1458ef04895a7f1cbd8e/config/gitleaks.toml
 # Original SHA256: e163e53b9e7e8a8511e77271e2b323ed057759542a6d988258afe3a1fa329caf
-# Rules-only modified body SHA256: df9fac13607aa6f3505c6220faed3c23fea35e2a1bec053ad39db29d61fb2934
+# Rules-only modified body SHA256: 89c72f76660e87008ec265b175acce1df9cc995d8075e4a9a81d7524b5ae7abe
 # Changes: remove global allowlist.paths (25 patterns); require complete credential-bearing short-lived Bedrock tokens.
 # All 222 rule identifiers, entropy thresholds, rule allowlists, and stopwords retained.
 # This file has been auto-generated. Do not edit manually.
@@ -213,7 +213,7 @@ description = "Identified a pattern that may indicate short-lived Amazon Bedrock
 # Require Action/algorithm/credential prefix, a 64-character signature segment, and terminal version.
 # The three signature alternatives correspond to Base64 byte alignment, not entropy/length tuning.
 # Source: https://github.com/aws/aws-bedrock-token-generator-python/blob/228eec2bfcf209d53dc776c902e00d9e6548e508/aws_bedrock_token_generator/token_generator.py#L41
-regex = '''\b(bedrock-api-key-YmVkcm9jay5hbWF6b25hd3MuY29tLz9BY3Rpb249Q2FsbFdpdGhCZWFyZXJUb2tlbiZYLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFs[A-Za-z0-9+/]+(?:JlgtQW16LVNpZ25hdHVy[A-Za-z0-9+/]{88}JlZlcnNpb249MQ==|LUFtei1TaWduYXR1cmU9[A-Za-z0-9+/]{88}ZXJzaW9uPTE=|WC1BbXotU2lnbmF0dXJl[A-Za-z0-9+/]{88}VmVyc2lvbj0x))(?:[\x60\x27"\s;]|\\[nr]|$)'''
+regex = '''\b(bedrock-api-key-YmVkcm9jay5hbWF6b25hd3MuY29tLz9BY3Rpb249Q2FsbFdpdGhCZWFyZXJUb2tlbiZYLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFs[A-Za-z0-9+/]+(?:JlgtQW16LVNpZ25hdHVy[A-Za-z0-9+/]{88}JlZlcnNpb249MQ==|LUFtei1TaWduYXR1cmU9[A-Za-z0-9+/]{88}ZXJzaW9uPTE=|WC1BbXotU2lnbmF0dXJl[A-Za-z0-9+/]{88}VmVyc2lvbj0x))(?:[^A-Za-z0-9+/=]|$)'''
 secretGroup = 1
 entropy = 3
 keywords = ["bedrock-api-key-"]
