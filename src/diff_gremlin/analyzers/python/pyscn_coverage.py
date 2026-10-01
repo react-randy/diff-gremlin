@@ -1,6 +1,6 @@
 """Validate PyScn snapshot identity and analyzed Python file coverage."""
 
-from diff_gremlin.analyzers.locations import relative_location
+from diff_gremlin.analyzers.locations import SourceLocations
 from diff_gremlin.analyzers.python.schema import count, list_value, object_value
 from diff_gremlin.domain.context import ScanContext, SourceFile
 
@@ -17,10 +17,11 @@ def coverage(
     if total != len(files) or analyzed + skipped != total or analyzed == 0:
         raise ValueError("invalid PyScn file coverage counts")
     complexity = object_value(data.get("complexity"))
+    locations = SourceLocations(ctx.root, files)
     paths = []
     for value in list_value(complexity.get("raw_metrics")):
         item = object_value(value)
-        paths.append(relative_location(ctx.root, item.get("file_path"), files))
+        paths.append(locations.relative(item.get("file_path")))
     if len(paths) != analyzed or len(set(paths)) != analyzed:
         raise ValueError("PyScn analyzed file locations disagree with summary")
     return analyzed, analyzed < len(files)

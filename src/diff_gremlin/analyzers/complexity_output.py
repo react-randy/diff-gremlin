@@ -1,18 +1,19 @@
 """Validate Lizard XML observations against the exact production inventory."""
 
 import xml.etree.ElementTree as ET
+from collections import Counter
 
-from diff_gremlin.analyzers.locations import relative_location
+from diff_gremlin.analyzers.locations import SourceLocations
 from diff_gremlin.analyzers.python.declarations import missing_declarations
 from diff_gremlin.domain.context import ScanContext, SourceFile
 
 
 def _file_counts(
-    ctx: ScanContext, files: tuple[SourceFile, ...], measure: ET.Element
+    locations: SourceLocations, files: tuple[SourceFile, ...], measure: ET.Element
 ) -> dict[str, int]:
     seen = {}
     for item in measure.findall("item"):
-        path = relative_location(ctx.root, item.attrib.get("name"), files)
+        path = locations.relative(item.attrib.get("name"))
         if path in seen:
             raise ValueError("duplicate Lizard file observation")
         seen[path] = _values(item, 4)[3]
@@ -22,19 +23,30 @@ def _file_counts(
 
 
 def _verify_function_counts(seen: dict[str, int], functions: list[dict]) -> None:
+    counts = Counter(row["file"] for row in functions)
     for path, expected in seen.items():
-        if sum(row["file"] == path for row in functions) != expected:
+        if counts[path] != expected:
             raise ValueError("Lizard file count disagrees with function observations")
+
+
+def _functions_by_file(functions: list[dict]) -> dict[str, list[dict]]:
+    grouped = {}
+    for row in functions:
+        grouped.setdefault(row["file"], []).append(row)
+    return grouped
 
 
 def _python_declarations(
     files: tuple[SourceFile, ...], functions: list[dict]
 ) -> list[dict]:
+    grouped = _functions_by_file(functions)
     return [
         declaration
         for file in files
         if file.path.suffix.lower() == ".py"
-        for declaration in missing_declarations(file, functions)
+        for declaration in missing_declarations(
+            file, grouped.get(file.relative_path, [])
+        )
     ]
 
 
@@ -45,14 +57,12 @@ def _values(item: ET.Element, length: int) -> list[int]:
     return values
 
 
-def _functions(
-    ctx: ScanContext, files: tuple[SourceFile, ...], measure: ET.Element
-) -> list[dict]:
+def _functions(locations: SourceLocations, measure: ET.Element) -> list[dict]:
     observations = {}
     for item in measure.findall("item"):
         name, location = item.attrib["name"].rsplit(" at ", 1)
         path, line_text = location.rsplit(":", 1)
-        path = relative_location(ctx.root, path, files)
+        path = locations.relative(path)
         line = int(line_text)
         cc = _values(item, 3)[2]
         if line < 1 or cc < 1 or not name.endswith("(...)"):
@@ -86,7 +96,8 @@ def observations(
     file_measure = root.find("measure[@type='File']")
     if function_measure is None or file_measure is None:
         raise ValueError("missing Lizard file or function measure")
-    seen = _file_counts(ctx, files, file_measure)
-    functions = _functions(ctx, files, function_measure)
+    locations = SourceLocations(ctx.root, files)
+    seen = _file_counts(locations, files, file_measure)
+    functions = _functions(locations, function_measure)
     _verify_function_counts(seen, functions)
     return functions + _python_declarations(files, functions)

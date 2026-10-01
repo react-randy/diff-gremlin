@@ -1,6 +1,6 @@
 """Extract independently validated located unreachable-code observations."""
 
-from diff_gremlin.analyzers.locations import relative_location
+from diff_gremlin.analyzers.locations import SourceLocations
 from diff_gremlin.analyzers.python.pyscn_coverage import component_valid
 from diff_gremlin.analyzers.python.schema import count, list_value, object_value
 from diff_gremlin.domain.context import ScanContext, SourceFile
@@ -8,15 +8,14 @@ from diff_gremlin.domain.findings import Finding
 
 
 def _diagnostic(
-    ctx: ScanContext,
-    files: tuple[SourceFile, ...],
+    locations: SourceLocations,
     file_path: str,
     name: str,
     finding_value: object,
 ) -> Finding:
     item = object_value(finding_value)
     location = object_value(item.get("location"))
-    path = relative_location(ctx.root, location.get("file_path"), files)
+    path = locations.relative(location.get("file_path"))
     start, end = (
         count(location.get("start_line")),
         count(location.get("end_line")),
@@ -45,17 +44,18 @@ def _diagnostic(
 def _located_findings(
     ctx: ScanContext, files: tuple[SourceFile, ...], dead: dict
 ) -> list[Finding]:
+    locations = SourceLocations(ctx.root, files)
     findings = []
     for file_value in list_value(dead.get("files")):
         file = object_value(file_value)
-        file_path = relative_location(ctx.root, file.get("file_path"), files)
+        file_path = locations.relative(file.get("file_path"))
         for function_value in list_value(file.get("functions")):
             function = object_value(function_value)
             name = function.get("name")
             if not isinstance(name, str):
                 raise TypeError("missing dead code function name")
             for finding_value in list_value(function.get("findings")):
-                findings.append(_diagnostic(ctx, files, file_path, name, finding_value))
+                findings.append(_diagnostic(locations, file_path, name, finding_value))
     return findings
 
 
