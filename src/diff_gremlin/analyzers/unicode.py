@@ -1,13 +1,20 @@
 """Locate selected Unicode controls while allowing ordinary Unicode text."""
 
+import re
 import unicodedata
 
 from diff_gremlin.domain.context import ScanContext
 from diff_gremlin.domain.findings import Finding, Severity
 from diff_gremlin.domain.stages import StageResult
+from diff_gremlin.text_content import omitted_paths, read_text
 
 _BIDI = {0x061C, 0x200E, 0x200F, *range(0x202A, 0x202F), *range(0x2066, 0x206A)}
 _HIDDEN = {0x180E, 0x200B, 0x2060, 0x2061, 0x2062, 0x2063, 0x2064}
+_CANDIDATES = re.compile(
+    "[\u00ad\u061c\u180e\u200b-\u200f\u202a-\u202e"
+    "\u2060-\u2064\u2066-\u2069\ufeff\ufe00-\ufe0f"
+    "\U000e0001-\U000e007f\U000e0100-\U000e01ef]"
+)
 
 
 def _emoji(char: str) -> bool:
@@ -60,23 +67,30 @@ def _control_rule(text: str, index: int) -> tuple[str, Severity] | None:
 
 
 def analyze_unicode(ctx: ScanContext) -> StageResult:
-    findings, skipped = [], []
+    findings, skipped = [], omitted_paths(ctx)
     analyzed = 0
     for file in ctx.files:
-        if file.size_bytes > 1024 * 1024:
+        if file.classification != "text":
             skipped.append(file.relative_path)
             continue
         try:
-            text = file.path.read_text(encoding="utf-8")
-        except (OSError, UnicodeError):
+            text = read_text(file)
+        except (OSError, UnicodeError, ValueError):
             skipped.append(file.relative_path)
             continue
         if "\x00" in text:
             skipped.append(file.relative_path)
             continue
         analyzed += 1
-        line, column = 1, 1
-        for index, char in enumerate(text):
+        line, line_start, previous = 1, -1, 0
+        for match in _CANDIDATES.finditer(text):
+            index, char = match.start(), match.group()
+            line += text.count("\n", previous, index)
+            newline = text.rfind("\n", previous, index)
+            if newline >= 0:
+                line_start = newline
+            previous = index
+            column = index - line_start
             rule = _control_rule(text, index)
             if rule:
                 name, severity = rule
@@ -91,10 +105,6 @@ def analyze_unicode(ctx: ScanContext) -> StageResult:
                         symbol=f"U+{ord(char):04X}",
                     )
                 )
-            if char == "\n":
-                line, column = line + 1, 1
-            else:
-                column += 1
     return StageResult(
         "security.unicode",
         "Unicode control observations",
@@ -105,8 +115,8 @@ def analyze_unicode(ctx: ScanContext) -> StageResult:
         metrics={"control_count": len(findings), "skipped_paths": skipped},
         findings=findings,
         reason="Selected control characters in current UTF-8 text; Unicode text is not itself suspicious"
-        + ("; unreadable/binary/large files omitted" if skipped else ""),
+        + ("; unreadable/possible-source files omitted" if skipped else ""),
         scope="current-inventoried-text",
         analyzed_files=analyzed,
-        eligible_files=len(ctx.files),
+        eligible_files=len(ctx.files) + len(omitted_paths(ctx)),
     )

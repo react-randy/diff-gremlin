@@ -26,7 +26,12 @@ def working_tree_dirty(
         entry.path: (entry.mode, entry.oid) for entry in tree if in_scope(entry.path)
     }
     actual = {
-        path: (mode, _blob_hash(content, len(tree[0].oid) if tree else 40))
+        path: (
+            mode,
+            content
+            if isinstance(content, str)
+            else _blob_hash(content, len(tree[0].oid) if tree else 40),
+        )
         for path, (mode, content) in copied.items()
     }
     if actual != expected:

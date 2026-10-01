@@ -40,7 +40,7 @@ def scan(
     from diff_gremlin.process import run
 
     started = time.monotonic()
-    inventory = collect_inventory(snapshot.root)
+    inventory = collect_inventory(snapshot.root, snapshot.scope_manifest)
     selected = capabilities(inventory.languages)
     stages = [inventory.stage]
     with tempfile.TemporaryDirectory(prefix="diff-gremlin-analysis-") as directory:
@@ -53,6 +53,7 @@ def scan(
             timeout,
             Path(directory),
             run,
+            inventory.scope_manifest,
         )
         for capability in selected:
             if profile == "full" or not capability.full_only:

@@ -5,7 +5,7 @@ from pathlib import Path
 
 from diff_gremlin.acquisition.git import Git
 from diff_gremlin.acquisition.paths import safe_path
-from diff_gremlin.inventory import MAX_FILE_BYTES, MAX_FILES, MAX_TREE_BYTES
+from diff_gremlin.inventory import MAX_FILES
 
 
 @dataclass(frozen=True, slots=True)
@@ -19,7 +19,6 @@ class TreeEntry:
 def tree_entries(git: Git, repo: Path, commit: str) -> tuple[TreeEntry, ...]:
     text = git.run(["ls-tree", "-r", "-z", "-l", commit], cwd=repo, data=True)
     entries = []
-    total = 0
     for row in text.split("\0"):
         if not row:
             continue
@@ -31,8 +30,7 @@ def tree_entries(git: Git, repo: Path, commit: str) -> tuple[TreeEntry, ...]:
                 "Source tree contains a submodule or unsupported object; materialize it explicitly first"
             )
         size = int(size)
-        total += size
-        if len(entries) >= MAX_FILES or size > MAX_FILE_BYTES or total > MAX_TREE_BYTES:
-            raise RuntimeError("Source tree exceeds bounded file/count/byte limits")
+        if len(entries) >= MAX_FILES:
+            raise RuntimeError("Source tree exceeds bounded file/count limits")
         entries.append(TreeEntry(path, mode, oid, size))
     return tuple(entries)
