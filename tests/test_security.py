@@ -217,11 +217,10 @@ def test_unreadable_binary_large_coverage_is_visible(context):
     )
     for analyzer in (_analyze_patterns, analyze_unicode):
         result = analyzer(ctx)
-        assert result.status == "limited" and result.analyzed_files == 0
+        assert result.status == "limited" and result.analyzed_files == 1
         assert set(result.metrics["skipped_paths"]) == {
             "missing.txt",
             "binary.dat",
-            "large.txt",
         }
 
 

@@ -76,23 +76,23 @@ SIGNATURES = (
 )
 
 
-def classify_content(path: str, content: bytes) -> tuple[str, str]:
-    """Return text, binary-asset, or possible-source from content evidence."""
+def _is_text(content: bytes) -> bool:
+    """Recognize UTF-8 without embedded binary NUL bytes."""
     try:
         content.decode("utf-8")
-        text = b"\x00" not in content
+        return b"\x00" not in content
     except UnicodeError:
-        text = False
-    if text:
-        return "text", "UTF-8 text"
-    if PurePosixPath(path).suffix.lower() in SOURCE_SUFFIXES:
-        return "possible-source", "Source/text filename contains non-UTF-8 or NUL bytes"
+        return False
+
+
+def _media_container(content: bytes) -> str:
+    """Recognize bounded RIFF and ISO media headers from captured bytes."""
     if (
         len(content) >= 12
         and content[:4] == b"RIFF"
         and content[8:12] in {b"WEBP", b"WAVE", b"AVI "}
     ):
-        return "binary-asset", "RIFF media container; contents not expanded or analyzed"
+        return "RIFF media container; contents not expanded or analyzed"
     if (
         len(content) >= 16
         and content[4:8] == b"ftyp"
@@ -100,10 +100,18 @@ def classify_content(path: str, content: bytes) -> tuple[str, str]:
         and content[8:12]
         in {b"isom", b"iso2", b"mp41", b"mp42", b"M4V ", b"qt  ", b"avif", b"avis"}
     ):
-        return (
-            "binary-asset",
-            "ISO base media container; contents not expanded or analyzed",
-        )
+        return "ISO base media container; contents not expanded or analyzed"
+    return ""
+
+
+def classify_content(path: str, content: bytes) -> tuple[str, str]:
+    """Return text, binary-asset, or possible-source from content evidence."""
+    if _is_text(content):
+        return "text", "UTF-8 text"
+    if PurePosixPath(path).suffix.lower() in SOURCE_SUFFIXES:
+        return "possible-source", "Source/text filename contains non-UTF-8 or NUL bytes"
+    if reason := _media_container(content):
+        return "binary-asset", reason
     for signature, kind in SIGNATURES:
         if content.startswith(signature):
             return "binary-asset", kind + "; contents not expanded or analyzed"

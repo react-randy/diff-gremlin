@@ -12,7 +12,7 @@ from diff_gremlin.analyzers.versions import tool_version
 from diff_gremlin.domain.context import ScanContext, SourceFile
 from diff_gremlin.domain.findings import Finding
 from diff_gremlin.domain.process import RunResult
-from diff_gremlin.domain.stages import StageResult
+from diff_gremlin.domain.stages import StageResult, StageStatus
 
 _ID = "complexity.lizard"
 SUPPORTED_SUFFIXES = frozenset(
@@ -108,6 +108,13 @@ def _validated_batch(
         raise ValueError("invalid Lizard observations") from error
 
 
+def _result_status(status: StageStatus, reason: str, is_limited: bool) -> StageStatus:
+    """Retain transport gaps separately from known language coverage limits."""
+    if reason:
+        return status
+    return "limited" if is_limited else "ok"
+
+
 def analyze_complexity(ctx: ScanContext) -> StageResult:
     files = tuple(
         file
@@ -143,7 +150,7 @@ def analyze_complexity(ctx: ScanContext) -> StageResult:
         _ID,
         "Function complexity",
         "complexity",
-        evidence.status if evidence.reason else "limited" if is_limited else "ok",
+        _result_status(evidence.status, evidence.reason, is_limited),
         "lizard",
         version=(
             tool_version(replace(ctx, timeout=evidence.remaining_time()), "lizard")
