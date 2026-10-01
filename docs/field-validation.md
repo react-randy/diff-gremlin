@@ -1,0 +1,158 @@
+# Field validation
+
+The gremlin went outside. Some receipts were incomplete. That is useful evidence too.
+
+## Method
+
+On 2026-10-01 we selected four public repositories using a Luna research worker,
+then scanned immutable commits with the actual full static toolchain. Two came
+from GitHub Trending; Java used explicit popularity/recency searches because the
+available Java Trending snapshot was stale. This is a small, deliberately varied
+sample, not a random population or a quality leaderboard.
+
+Checks used Diff Gremlin 1.0.0, score policy 1.0.0 and the full profile. Analyzer
+versions were Ruff 0.16.8, Pyrefly 1.3.0, Lizard 1.24.0, Radon 6.0.1, PyScn
+1.32.1, ESLint 10.11.0, TypeScript 6.0.3, jscpd 4.2.3, JDK 25.0.4.1,
+Gitleaks 8.30.1 and shfmt 3.14.1; Node 22.23.1 and Python 3.12.3 supplied the
+local runtime. These field timings describe this machine and include acquisition.
+They are not cross-machine benchmarks.
+
+Only trusted checker tools and shipped parsers ran. Target dependencies, builds,
+tests, wrappers, hooks, plugins and package scripts did not run. A static scan does
+not establish project runtime correctness, security, license validity or authorship.
+Private receipts were checked against the selected source commits. The table
+contains sanitized observations; matched credential values and host paths are omitted.
+
+## Pinned sample
+
+| Repository | Immutable source | Selection evidence |
+| --- | --- | --- |
+| [TwitchDropsMiner](https://github.com/DevilXD/TwitchDropsMiner) | [`22d0c6134f9291d1e904012c465504a22bd3f97c`](https://github.com/DevilXD/TwitchDropsMiner/tree/22d0c6134f9291d1e904012c465504a22bd3f97c) | [Daily Trending, English view](https://github.com/trending?spoken_language_code=en), retrieved Oct 1 |
+| [mobile-mcp](https://github.com/mobile-next/mobile-mcp) | [`ef371e8c6fd7fee066d773b98a0ce6b57a73b42d`](https://github.com/mobile-next/mobile-mcp/tree/ef371e8c6fd7fee066d773b98a0ce6b57a73b42d) | [TypeScript Trending](https://github.com/trending?l=TypeScript), returned Sep 29 snapshot; live repository metadata checked Oct 1 |
+| [Recipe Lab](https://github.com/voxivoid/recipe-lab-sony-pmca) | [`f488094eed32f59ad23a17bae6d07c7424ef71a4`](https://github.com/voxivoid/recipe-lab-sony-pmca/tree/f488094eed32f59ad23a17bae6d07c7424ef71a4) | Official repository search: Java, created Jul 1–Oct 1, at least 50 stars, public/nonfork/nonarchived; sorted by stars |
+| [TheAlgorithms/Java](https://github.com/TheAlgorithms/Java) | [`1c22ba66beac87f731fcb507bfa194db369ed854`](https://github.com/TheAlgorithms/Java/tree/1c22ba66beac87f731fcb507bfa194db369ed854) | Official repository search: Java, at least 50 stars, pushed since Sep 24, GitHub size under 20,000 KiB; sorted by stars |
+
+Trending pages change; those dates describe the research snapshot, not today's
+ranking. The Java searches are popularity/recency filters, not Trending rankings.
+The sample favors small, active public GitHub repositories in supported languages.
+
+## Results
+
+TwitchDropsMiner completed in **12.04 seconds**, exit **1**, with a **Hold**
+decision and **unknown score**: **9/12 required stages** completed. Its `_run`
+function at [twitch.py:608](https://github.com/DevilXD/TwitchDropsMiner/blob/22d0c6134f9291d1e904012c465504a22bd3f97c/twitch.py#L608)
+had cyclomatic complexity **62**, a configured blocker. Python external imports
+limited type evidence, and six binary/large files were omitted from text security
+checks. Shallow Git history was an optional limitation. No checker defect was
+established by this sample.
+
+mobile-mcp completed the corrected scan in **16.389 seconds**, exit **3**, with
+an **unknown score**, **5/9 required stages** complete and no configured blockers.
+There were 61 lint findings and 351 function/code-path observations, with maximum
+complexity 17. Four binary images were omitted from text security checks; external
+type dependencies/globals remained unresolved. Native clone evidence was rejected
+with the precise cause: `clone range outside source lines`. The native 1,000-line
+filter also excludes its 1,252-line server file; that gap remains visible. A
+telemetry credential-pattern match has unknown privileges and is not proof of an
+exposed private credential. No matched value is published here.
+
+Twitch used checker commit
+[`a68e57934f635bca9a3f8c93af5f8e6a6e82fde2`](https://github.com/react-randy/diff-gremlin/commit/a68e57934f635bca9a3f8c93af5f8e6a6e82fde2).
+Mobile's corrected scan used
+[`4a3c3f240e910acca2f424aac61cadd78c02da83`](https://github.com/react-randy/diff-gremlin/commit/4a3c3f240e910acca2f424aac61cadd78c02da83).
+The original Mobile run was 15.699 seconds with the same score, coverage and
+findings; only the useful failure explanation changed. These successive checker
+commits share score policy 1.0.0; runtime timing differences are not a claimed speedup.
+
+Recipe Lab exited **2** after **1.704 seconds**, before analysis. The pinned tree
+contains the [`jni/platform` submodule](https://github.com/voxivoid/recipe-lab-sony-pmca/tree/f488094eed32f59ad23a17bae6d07c7424ef71a4/jni)
+(mode 160000). Acquisition correctly refused a source tree with a gitlink. It
+produced **no receipt, score or stage counts**. We retained this refusal in the
+sample and selected the fourth Java repository to exercise the parser.
+
+TheAlgorithms/Java completed the corrected scan in **34.984 seconds**, exit **3**,
+with an **unknown score**, **11/12 required stages** complete and no configured
+blockers. Checker commit
+[`8980c4045bbb9f53f92d14c6dd1060b546f93558`](https://github.com/react-randy/diff-gremlin/commit/8980c4045bbb9f53f92d14c6dd1060b546f93558)
+produced the receipt. Its sole required gap was standalone Java type evidence:
+40 diagnostics included six external-dependency diagnostics. The pinned
+[`UnitConversions.java`](https://github.com/TheAlgorithms/Java/blob/1c22ba66beac87f731fcb507bfa194db369ed854/src/main/java/com/thealgorithms/conversions/UnitConversions.java#L6)
+imports Apache Commons, which its Maven descriptor declares; the checker does not
+install that dependency or run Maven.
+
+Lizard covered 842 production files (841 Java plus one Python) and observed 4,164
+functions, maximum complexity **29**. A separate trusted JDK parse-only control
+confirmed that complexity at
+[`Edmonds.java:84`](https://github.com/TheAlgorithms/Java/blob/1c22ba66beac87f731fcb507bfa194db369ed854/src/main/java/com/thealgorithms/graph/Edmonds.java#L84):
+nine for loops, one while, fourteen conditionals and four conditional AND operators,
+plus baseline one. This is a review signal, not a configured blocker. Source
+security checks covered all 1,669 inventoried files. The small Python slice also
+completed its static checks; shallow Python history remained optional and limited.
+The aborted 299.807-second baseline never completed, so the two runs do not define
+a valid whole-command speedup ratio. No further checker defect was established.
+
+## Stage coverage
+
+Counts are analyzed/eligible files, not a percentage of project behavior tested.
+“Limited” retains useful observations while preventing a complete headline score.
+
+| Stage | TwitchDropsMiner | mobile-mcp, corrected |
+| --- | --- | --- |
+| Inventory / hygiene | Both ok, 57/57 | Both ok, 68/68 |
+| Unicode / secrets | Both limited, 51/57 | Both limited, 64/68 |
+| Execution observations | Ok, 16/16 | Ok, 32/32 |
+| Lizard complexity | Ok, 14/14 | Not selected for JS/TS |
+| Ruff | Ok, 14/14 | Not selected |
+| Pyrefly | Limited, 14/14 | Not selected |
+| PyScn health / clones / dead code | All ok, 14/14; health optional | Not selected |
+| Radon maintainability | Ok, 14/14; optional | Not selected |
+| Shell syntax / complexity | Both ok, 2/2 | Not selected |
+| JS/TS complexity / ESLint | Not selected | Both ok, 18/18 |
+| jscpd clones | Not selected | Failed, 0/18 |
+| TypeScript | Not selected | Limited, 16/16 |
+| Python history | Limited, 14/14; optional | Unsupported, 0/0; optional |
+
+Recipe Lab never reached these stages. The corrected Algorithms receipt contains:
+
+| Stage | Status | Analyzed/eligible |
+| --- | --- | --- |
+| Inventory / hygiene | Both ok | 1,669/1,669 each |
+| Unicode / secrets | Both ok | 1,669/1,669 each |
+| Execution observations | Ok | 1,630/1,630 |
+| Lizard complexity | Ok | 842/842 |
+| Ruff / Pyrefly | Both ok | 1/1 each |
+| PyScn health / clones / dead code | All ok; health optional | 1/1 each |
+| Radon maintainability | Ok; optional | 1/1 |
+| Java syntax structure | Ok | 841/841 |
+| Java standalone types | Limited | 841/841 |
+| Python history | Limited; optional | 1/1 |
+
+## Fixes discovered in the field
+
+- [#42: Explain rejected native clone evidence](https://github.com/react-randy/diff-gremlin/issues/42).
+  mobile-mcp exposed reversed endpoints in native jscpd 4.2.3 output: one simulator
+  clone reported lines 207 → 186 and token positions 1841 → 1767. Rejecting this
+  evidence was correct. The improvement names the safe validation cause while
+  retaining a failed stage, zero credited files and an unknown overall score.
+  Invalid clones are not reordered or silently dropped to manufacture a score.
+- [#43: Scale inventory-backed validation](https://github.com/react-randy/diff-gremlin/issues/43).
+  The first Algorithms scan was explicitly stopped after **299.807 seconds**,
+  without a receipt. Independent controls proved that 256 source lookups caused
+  **65,792 filesystem resolutions**: the entire allowlist was rebuilt per row.
+  The correction constructs source identity once per batch and counts Lizard
+  function rows once. The aborted run has no score or completed-stage claim.
+
+## Reproduce
+
+Use the complete Docker toolchain from a supported Linux amd64/arm64 host:
+
+```sh
+docker run --rm ghcr.io/react-randy/diff-gremlin:1.0.0 check \
+  https://github.com/DevilXD/TwitchDropsMiner \
+  --ref 22d0c6134f9291d1e904012c465504a22bd3f97c --profile full --format json
+```
+
+Replace the URL and full commit with any table entry. Save the exit status along
+with the JSON. Acquisition errors may produce no JSON; incomplete evidence must
+remain unknown. Machine, runtime, network and analyzer-version differences can
+change timing and diagnostics. External dependencies are intentionally not installed.

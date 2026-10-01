@@ -40,6 +40,13 @@ Provider metadata records both repositories and full expected SHAs. Acquisition
 verifies those objects. Reports distinguish the provider base from the chosen
 comparison base and never silently follow a moving branch.
 
+Analyzer location validation builds `SourceLocations` once per observation batch.
+Its canonical inventory belongs to that batch; each incoming path is resolved
+again and must map to an inventoried file. No global cache crosses snapshots.
+Lizard validates per-file function counts with one histogram, and Python declaration
+reconciliation receives only the observations for that file. This keeps inventory
+validation linear in files plus observations while preserving missing-evidence checks.
+
 ## Contribution rule
 
 Give each function one operation and each file one responsibility. Add a new
