@@ -7,20 +7,28 @@ from diff_gremlin.policy.metrics import stage_score
 from diff_gremlin.policy.thresholds import WEIGHTS, grade
 
 
+def selected_category(stages: list[StageResult], category: str) -> list[StageResult]:
+    return [
+        stage
+        for stage in stages
+        if stage.category == category and stage.required and stage.id != "inventory"
+    ]
+
+
+def worst_score(stages: list[StageResult]) -> int | None:
+    scores = [stage_score(stage) for stage in stages]
+    if None in scores:
+        return None
+    return min(score for score in scores if score is not None)
+
+
 def category_scores(stages: list[StageResult]) -> dict[str, int | None]:
-    result = {}
+    result: dict[str, int | None] = {}
     for category in WEIGHTS:
-        selected = [
-            stage
-            for stage in stages
-            if stage.category == category and stage.required and stage.id != "inventory"
-        ]
+        selected = selected_category(stages, category)
         if not selected:
             continue
-        scores = [stage_score(stage) for stage in selected]
-        result[category] = (
-            None if None in scores else min(score for score in scores if score is not None)
-        )
+        result[category] = worst_score(selected)
     return result
 
 

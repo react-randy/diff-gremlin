@@ -2,7 +2,7 @@
 
 import os
 import stat
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from diff_gremlin.domain.context import SourceFile
@@ -77,10 +77,7 @@ class Inventory:
 def is_test_path(path: Path) -> bool:
     stem = path.stem
     return (
-        any(
-            part.lower() in {"test", "tests", "__tests__", "spec", "specs"}
-            for part in path.parts
-        )
+        any(part.lower() in {"test", "tests", "__tests__", "spec", "specs"} for part in path.parts)
         or stem.lower() == "test"
         or stem.lower().startswith("test_")
         or stem.lower().endswith(("_test", ".test", ".spec", "_spec"))
@@ -92,114 +89,115 @@ def _issue(path: str, reason: str) -> Finding:
     return Finding("inventory.incomplete", reason, "info", path=path)
 
 
-def collect_inventory(root: Path) -> Inventory:
-    """Count all regular in-scope files without traversing a symbolic link."""
-    root = Path(root)
-    if root.is_symlink() or not root.is_dir():
-        raise ValueError("Inventory root must be a regular directory")
-    files = []
-    issues = []
-    exclusions: dict[str, int] = {}
-    total = entries = 0
-    pending = [root]
-    capped = False
-    while pending and not capped:
-        directory = pending.pop()
-        try:
-            with os.scandir(directory) as children:
-                for child in children:
-                    entries += 1
-                    relative = Path(child.path).relative_to(root)
-                    if entries > MAX_ENTRIES or len(files) >= MAX_FILES:
-                        issues.append(
-                            _issue(
-                                relative.as_posix(),
-                                "Inventory entry/file limit reached",
-                            )
-                        )
-                        capped = True
-                        break
-                    try:
-                        info = child.stat(follow_symlinks=False)
-                        if stat.S_ISLNK(info.st_mode):
-                            issues.append(
-                                _issue(
-                                    relative.as_posix(), "Symbolic link not followed"
-                                )
-                            )
-                        elif stat.S_ISDIR(info.st_mode):
-                            if child.name in EXCLUDED_DIRECTORIES:
-                                exclusions[child.name] = (
-                                    exclusions.get(child.name, 0) + 1
-                                )
-                            else:
-                                pending.append(Path(child.path))
-                        elif stat.S_ISREG(info.st_mode):
-                            if (
-                                info.st_size > MAX_FILE_BYTES
-                                or total + info.st_size > MAX_TREE_BYTES
-                            ):
-                                issues.append(
-                                    _issue(
-                                        relative.as_posix(),
-                                        "Inventory byte limit reached",
-                                    )
-                                )
-                                continue
-                            # Check readability without loading a potentially large file.
-                            with open(child.path, "rb") as stream:
-                                stream.read(1)
-                            total += info.st_size
-                            files.append(
-                                SourceFile(
-                                    Path(child.path),
-                                    relative.as_posix(),
-                                    LANGUAGES.get(relative.suffix.lower(), ""),
-                                    is_test_path(relative),
-                                    info.st_size,
-                                )
-                            )
-                        else:
-                            issues.append(
-                                _issue(relative.as_posix(), "Nonregular file not read")
-                            )
-                    except OSError:
-                        issues.append(
-                            _issue(
-                                relative.as_posix(), "File metadata/content unreadable"
-                            )
-                        )
-        except OSError:
-            issues.append(
-                _issue(directory.relative_to(root).as_posix(), "Directory unreadable")
-            )
-    files.sort(key=lambda source: source.relative_path)
-    stage = StageResult(
+@dataclass(slots=True)
+class InventoryState:
+    root: Path
+    files: list[SourceFile] = field(default_factory=list)
+    issues: list[Finding] = field(default_factory=list)
+    exclusions: dict[str, int] = field(default_factory=dict)
+    total: int = 0
+    entries: int = 0
+    capped: bool = False
+
+    def issue(self, path: Path, reason: str) -> None:
+        self.issues.append(_issue(path.as_posix(), reason))
+
+    def limit_reached(self, relative: Path) -> bool:
+        self.entries += 1
+        if self.entries <= MAX_ENTRIES and len(self.files) < MAX_FILES:
+            return False
+        self.issue(relative, "Inventory entry/file limit reached")
+        self.capped = True
+        return True
+
+
+def inventory_file(state: InventoryState, child, relative: Path, size: int) -> None:
+    if size > MAX_FILE_BYTES or state.total + size > MAX_TREE_BYTES:
+        state.issue(relative, "Inventory byte limit reached")
+        return
+    with open(child.path, "rb") as stream:
+        stream.read(1)
+    state.total += size
+    state.files.append(
+        SourceFile(
+            Path(child.path),
+            relative.as_posix(),
+            LANGUAGES.get(relative.suffix.lower(), ""),
+            is_test_path(relative),
+            size,
+        )
+    )
+
+
+def inventory_entry(state: InventoryState, child, relative: Path, pending: list[Path]) -> None:
+    info = child.stat(follow_symlinks=False)
+    if stat.S_ISLNK(info.st_mode):
+        state.issue(relative, "Symbolic link not followed")
+    elif stat.S_ISDIR(info.st_mode):
+        if child.name in EXCLUDED_DIRECTORIES:
+            state.exclusions[child.name] = state.exclusions.get(child.name, 0) + 1
+        else:
+            pending.append(Path(child.path))
+    elif stat.S_ISREG(info.st_mode):
+        inventory_file(state, child, relative, info.st_size)
+    else:
+        state.issue(relative, "Nonregular file not read")
+
+
+def inventory_directory(state: InventoryState, directory: Path, pending: list[Path]) -> None:
+    try:
+        with os.scandir(directory) as children:
+            for child in children:
+                relative = Path(child.path).relative_to(state.root)
+                if state.limit_reached(relative):
+                    break
+                try:
+                    inventory_entry(state, child, relative, pending)
+                except OSError:
+                    state.issue(relative, "File metadata/content unreadable")
+    except OSError:
+        state.issue(directory.relative_to(state.root), "Directory unreadable")
+
+
+def inventory_stage(state: InventoryState) -> StageResult:
+    return StageResult(
         "inventory",
         "Source inventory",
         "hygiene",
-        "limited" if issues else "ok",
+        "limited" if state.issues else "ok",
         "builtin",
         metrics={
-            "files": len(files),
-            "bytes": total,
-            "entries": entries,
-            "excluded_directories": exclusions,
+            "files": len(state.files),
+            "bytes": state.total,
+            "entries": state.entries,
+            "excluded_directories": state.exclusions,
             "exclusion_reasons": EXCLUDED_DIRECTORIES.copy(),
             "max_files": MAX_FILES,
             "max_file_bytes": MAX_FILE_BYTES,
             "max_tree_bytes": MAX_TREE_BYTES,
             "max_entries": MAX_ENTRIES,
         },
-        findings=issues,
-        reason="Some source paths were not inventoried" if issues else "",
+        findings=state.issues,
+        reason="Some source paths were not inventoried" if state.issues else "",
         scope="all",
-        analyzed_files=len(files),
-        eligible_files=len(files) + len(issues),
+        analyzed_files=len(state.files),
+        eligible_files=len(state.files) + len(state.issues),
     )
+
+
+def collect_inventory(root: Path) -> Inventory:
+    """Count regular in-scope files without traversing a symbolic link."""
+    root = Path(root)
+    if root.is_symlink() or not root.is_dir():
+        raise ValueError("Inventory root must be a regular directory")
+    state = InventoryState(root)
+    pending = [root]
+    while pending and not state.capped:
+        inventory_directory(state, pending.pop(), pending)
+    state.files.sort(key=lambda source: source.relative_path)
     return Inventory(
-        tuple(files),
-        tuple(f for f in files if f.language and not f.is_test),
-        tuple(sorted({f.language for f in files if f.language})),
-        stage,
+        tuple(state.files),
+        tuple(f for f in state.files if f.language and not f.is_test),
+        tuple(sorted({f.language for f in state.files if f.language})),
+        inventory_stage(state),
     )

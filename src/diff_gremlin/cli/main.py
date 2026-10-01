@@ -30,8 +30,11 @@ def main(arguments: list[str] | None = None) -> int:
         output, code = dispatch(args)
     except (OSError, ValueError, RuntimeError) as error:
         from diff_gremlin.process import redact
+        from diff_gremlin.reporting.escaping import plain
 
-        print(f"diff-gremlin: {args.command} failed: {redact(str(error), {})}", file=sys.stderr)
+        print(
+            f"diff-gremlin: {args.command} failed: {plain(redact(str(error), {}))}", file=sys.stderr
+        )
         return 2
     except KeyboardInterrupt:
         print(

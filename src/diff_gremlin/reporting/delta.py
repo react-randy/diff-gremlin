@@ -34,7 +34,12 @@ def numeric_deltas(base: StageResult, head: StageResult) -> dict:
     result = {}
     for key in base.metrics.keys() & head.metrics.keys():
         before, after = base.metrics[key], head.metrics[key]
-        if type(before) in (int, float) and type(after) in (int, float):
+        if (
+            isinstance(before, (int, float))
+            and isinstance(after, (int, float))
+            and not isinstance(before, bool)
+            and not isinstance(after, bool)
+        ):
             result[key] = {
                 "base": before,
                 "head": after,
@@ -43,21 +48,41 @@ def numeric_deltas(base: StageResult, head: StageResult) -> dict:
     return result
 
 
-def stage_delta(base: StageResult | None, head: StageResult | None) -> dict:
-    comparable = base is not None and head is not None and base.status == head.status == "ok"
+def side_details(stage: StageResult | None) -> dict:
+    if stage is None:
+        return {"status": "absent", "score": None, "findings": []}
+    return {"status": stage.status, "score": stage_score(stage), "findings": stage.findings}
+
+
+def confirmed_changes(base: StageResult | None, head: StageResult | None) -> dict:
+    if base is None or head is None or base.status != "ok" or head.status != "ok":
+        return {
+            "comparable": False,
+            "metrics": {},
+            "resolved_findings": [],
+            "resolution_note": "Resolution requires complete observations on both sides.",
+        }
     return {
-        "id": (head or base).id,
-        "base_status": base.status if base else "absent",
-        "head_status": head.status if head else "absent",
-        "comparable": comparable,
-        "base_score": stage_score(base) if base else None,
-        "head_score": stage_score(head) if head else None,
-        "metrics": numeric_deltas(base, head) if comparable else {},
-        "added_findings": unmatched(head.findings, base.findings if base else []) if head else [],
-        "resolved_findings": unmatched(base.findings, head.findings) if comparable else [],
-        "resolution_note": "Resolution requires complete observations on both sides."
-        if not comparable
-        else "",
+        "comparable": True,
+        "metrics": numeric_deltas(base, head),
+        "resolved_findings": unmatched(base.findings, head.findings),
+        "resolution_note": "",
+    }
+
+
+def stage_delta(base: StageResult | None, head: StageResult | None) -> dict:
+    stage = head or base
+    if stage is None:
+        raise ValueError("A delta requires at least one observed stage")
+    before, after = side_details(base), side_details(head)
+    return {
+        "id": stage.id,
+        "base_status": before["status"],
+        "head_status": after["status"],
+        "base_score": before["score"],
+        "head_score": after["score"],
+        "added_findings": unmatched(after["findings"], before["findings"]),
+        **confirmed_changes(base, head),
     }
 
 

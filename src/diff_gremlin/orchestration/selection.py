@@ -111,4 +111,4 @@ def omitted_ids(selected: list[Capability], profile: str) -> tuple[str, ...]:
     omitted = [cap.id for cap in selected if cap.full_only]
     if "python.health.pyscn" in omitted:
         omitted.extend(("python.duplication.pyscn", "python.deadcode.pyscn"))
-    return tuple([*omitted, "history.git"])
+    return (*omitted, "history.git")

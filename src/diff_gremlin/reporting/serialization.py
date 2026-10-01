@@ -7,6 +7,7 @@ from diff_gremlin import __version__
 from diff_gremlin.domain.reports import ScanReport
 from diff_gremlin.policy.metrics import stage_score
 from diff_gremlin.policy.thresholds import POLICY_VERSION
+from diff_gremlin.reporting.advice import next_actions
 
 SCHEMA_VERSION = "1.0.0"
 
@@ -33,6 +34,7 @@ def report_document(report: ScanReport) -> dict:
             "scope": "production static evidence; security and hygiene inspect inventoried text",
         },
         "stages": [stage_document(stage) for stage in report.stages],
+        "next_actions": next_actions(report),
         "duration_seconds": round(report.duration_seconds, 3),
         "limitations": [
             "Static checks do not certify security, correctness, or authorship.",
