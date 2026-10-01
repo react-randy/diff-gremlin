@@ -32,7 +32,7 @@ def _copy_bytes(stream: BinaryIO, target: BinaryIO, size: int, deadline: float) 
 def _copy_object(
     name: str, directory_fd: int, output: Path, count: int, total: int, deadline: float
 ) -> int:
-    fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=directory_fd)
+    fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory_fd)
     with os.fdopen(fd, "rb") as stream:
         info = os.fstat(stream.fileno())
         if not stat.S_ISREG(info.st_mode):

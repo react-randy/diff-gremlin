@@ -3,6 +3,7 @@
 import os
 import shutil
 import subprocess
+import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -399,3 +400,35 @@ def test_filesystem_copy_expired_deadline_fails_before_source_write(copy, tmp_pa
     with pytest.raises(RuntimeError, match="deadline"):
         copy(source, tmp_path / "snapshot", deadline=0)
     assert (source / "code.py").read_bytes() == b"captured bytes"
+
+
+def test_object_fifo_is_rejected_without_blocking_acquisition(tmp_path):
+    source = tmp_path / "objects"
+    source.mkdir()
+    os.mkfifo(source / "object")
+    code = (
+        "import sys, time; from pathlib import Path; "
+        "sys.path.insert(0, sys.argv[1]); "
+        "from diff_gremlin.acquisition.objects import copy_object_store; "
+        "copy_object_store(Path(sys.argv[2]), Path(sys.argv[3]), "
+        "deadline=time.monotonic() + 0.25)"
+    )
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-c",
+            code,
+            str(Path(__file__).resolve().parents[1] / "src"),
+            str(source),
+            str(tmp_path / "snapshot"),
+        ],
+        env={"PATH": os.defpath},
+        timeout=2,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert "Git object store contains a nonregular object" in result.stderr
+    assert (source / "object").exists()
