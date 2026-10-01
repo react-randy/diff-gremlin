@@ -1,8 +1,9 @@
 # Diff Gremlin controlled Gitleaks rules, upstream MIT.
 # Source: https://github.com/gitleaks/gitleaks/blob/83d9cd684c87d95d656c1458ef04895a7f1cbd8e/config/gitleaks.toml
 # Original SHA256: e163e53b9e7e8a8511e77271e2b323ed057759542a6d988258afe3a1fa329caf
-# Rules-only modified body SHA256: 54807ead6528f7c5d868db4017753560354d2a06081435c7d257057557271ff8
-# Only change: remove global allowlist.paths (25 patterns). All detection rules, entropy thresholds, rule allowlists, and stopwords retained.
+# Rules-only modified body SHA256: df9fac13607aa6f3505c6220faed3c23fea35e2a1bec053ad39db29d61fb2934
+# Changes: remove global allowlist.paths (25 patterns); require complete credential-bearing short-lived Bedrock tokens.
+# All 222 rule identifiers, entropy thresholds, rule allowlists, and stopwords retained.
 # This file has been auto-generated. Do not edit manually.
 # If you would like to contribute new rules, please use
 # cmd/generate/config/main.go and follow the contributing guidelines
@@ -208,7 +209,12 @@ keywords = ["absk"]
 [[rules]]
 id = "aws-amazon-bedrock-api-key-short-lived"
 description = "Identified a pattern that may indicate short-lived Amazon Bedrock API keys, risking unauthorized Amazon Bedrock usage"
-regex = '''bedrock-api-key-YmVkcm9jay5hbWF6b25hd3MuY29t'''
+# AWS generator: Base64(full SigV4 URL sans scheme + &Version=1).
+# Require Action/algorithm/credential prefix, a 64-character signature segment, and terminal version.
+# The three signature alternatives correspond to Base64 byte alignment, not entropy/length tuning.
+# Source: https://github.com/aws/aws-bedrock-token-generator-python/blob/228eec2bfcf209d53dc776c902e00d9e6548e508/aws_bedrock_token_generator/token_generator.py#L41
+regex = '''\b(bedrock-api-key-YmVkcm9jay5hbWF6b25hd3MuY29tLz9BY3Rpb249Q2FsbFdpdGhCZWFyZXJUb2tlbiZYLUFtei1BbGdvcml0aG09QVdTNC1ITUFDLVNIQTI1NiZYLUFtei1DcmVkZW50aWFs[A-Za-z0-9+/]+(?:JlgtQW16LVNpZ25hdHVy[A-Za-z0-9+/]{88}JlZlcnNpb249MQ==|LUFtei1TaWduYXR1cmU9[A-Za-z0-9+/]{88}ZXJzaW9uPTE=|WC1BbXotU2lnbmF0dXJl[A-Za-z0-9+/]{88}VmVyc2lvbj0x))(?:[\x60\x27"\s;]|\\[nr]|$)'''
+secretGroup = 1
 entropy = 3
 keywords = ["bedrock-api-key-"]
 

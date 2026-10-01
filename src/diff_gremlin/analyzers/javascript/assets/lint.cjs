@@ -26,13 +26,17 @@ const inherited = {
 (async () => {
   const installedRequire = createRequire(path.join(eslintPath, 'package.json'));
   const recommended = installedRequire('@eslint/js').configs.recommended.rules;
+  const javascriptRules = Object.fromEntries(Object.entries(inherited).filter(([name]) => !name.startsWith('@typescript-eslint/')));
+  Object.assign(javascriptRules, {'no-unused-vars': 'error', 'no-shadow': 'error', 'no-redeclare': 'error', 'no-dupe-class-members': 'error'});
   const eslint = new ESLint({cwd: process.cwd(), overrideConfigFile: true, ignore: false, allowInlineConfig: false,
     overrideConfig: [{files: ['**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}'],
       languageOptions: {parser, ecmaVersion: 'latest', sourceType: 'module',
         globals: {...globals.es2022, ...globals.node, ...globals.browser},
         parserOptions: {ecmaFeatures: {jsx: true}, project: false}},
       plugins: {'@typescript-eslint': plugin},
-      rules: {...recommended, ...plugin.configs.recommended.rules, ...inherited}}]});
+      rules: {...recommended, ...javascriptRules}},
+      {files: ['**/*.{ts,tsx,mts,cts}'], rules: {...plugin.configs.recommended.rules, ...inherited}},
+      {files: ['**/*.{cjs,cts}'], languageOptions: {sourceType: 'commonjs'}}]});
   // lintText prevents relative-path ignore/config search and uses only owned configuration.
   const results = [];
   for (const file of files) {
