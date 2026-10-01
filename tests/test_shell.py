@@ -465,3 +465,106 @@ def test_parser_diagnostic_huge_location_cannot_raise_or_leak(tmp_path):
     stage = analyze_shell_syntax(ctx)
     assert stage.status != "ok" and stage.findings[0].line == 0
     assert "SYNTHETIC_SECRET_PAYLOAD" not in json.dumps(asdict(stage))
+
+
+class Clock:
+    """Advance controlled wall time only at verified process boundaries."""
+
+    def __init__(self):
+        self.value = 0.0
+
+    def monotonic(self):
+        return self.value
+
+
+class BudgetRunner(ParserRunner):
+    """Observe each remaining deadline without changing the AST evidence."""
+
+    def __init__(self, result, clock, version_seconds=1, file_seconds=2):
+        super().__init__(result)
+        self.clock = clock
+        self.version_seconds = version_seconds
+        self.file_seconds = file_seconds
+
+    def __call__(self, command, **kwargs):
+        result = super().__call__(command, **kwargs)
+        self.clock.value += (
+            self.version_seconds if command[-1] == "--version" else self.file_seconds
+        )
+        return result
+
+
+def budget_context(tmp_path, monkeypatch, timeout=3):
+    """Use independently validated AST and equal source files for partial-budget tests."""
+    text = "#!/bin/bash\neval 'SYNTHETIC_SECRET_PAYLOAD'\n"
+    ctx = context(tmp_path, {"a.sh": text, "b.sh": text, "c.sh": text})
+    output = json.dumps(native_tree(ctx))
+    clock = Clock()
+    runner = BudgetRunner(RunResult(("shfmt",), 0, output), clock)
+    monkeypatch.setattr(parser.time, "monotonic", clock.monotonic)
+    return replace(ctx, timeout=timeout, runner=runner), runner, clock, output
+
+
+def test_cumulative_deadline_includes_version_and_retains_findings(tmp_path, monkeypatch):
+    ctx, runner, _, _ = budget_context(tmp_path, monkeypatch)
+    findings, count, reason = shell_observations(ctx, ctx.files)
+    assert count == 1 and len(findings) == 1 and findings[0].rule == "shell.eval"
+    assert "cumulative time budget exhausted; omitted 2 eligible files" in reason
+    assert [kwargs["timeout"] for _, kwargs in runner.calls] == [3, 2]
+    assert "SYNTHETIC_SECRET_PAYLOAD" not in json.dumps([asdict(f) for f in findings])
+
+
+def test_version_probe_can_consume_entire_deadline(tmp_path, monkeypatch):
+    ctx, runner, _, _ = budget_context(tmp_path, monkeypatch)
+    runner.version_seconds = 3
+    stage = analyze_shell_syntax(ctx)
+    assert stage.status == "limited" and stage.analyzed_files == 0 and stage.eligible_files == 3
+    assert "time budget exhausted; omitted 3 eligible files" in stage.reason
+    assert len(runner.calls) == 1
+
+
+def test_no_deadline_remaining_never_invokes_a_tool(tmp_path):
+    runner = ParserRunner(RunResult(("shfmt",), 0, ""))
+    stage = analyze_shell_syntax(replace(context(tmp_path, runner=runner), timeout=0))
+    assert stage.status == "limited" and stage.analyzed_files == 0
+    assert "time budget exhausted; omitted 1 eligible files" in stage.reason
+    assert runner.calls == []
+
+
+def test_cumulative_source_bytes_keep_prior_tree_and_counts(tmp_path, monkeypatch):
+    ctx, runner, _, _ = budget_context(tmp_path, monkeypatch, timeout=30)
+    monkeypatch.setattr(parser, "MAX_TOTAL_SOURCE_BYTES", ctx.files[0].size_bytes)
+    stage = analyze_shell_complexity(ctx)
+    assert stage.status == "limited" and stage.analyzed_files == 1 and stage.eligible_files == 3
+    assert stage.metrics["functions"] == 0 and len(runner.calls) == 2
+    assert "source byte budget exhausted; omitted 2 eligible files" in stage.reason
+
+
+def test_cumulative_output_bytes_keep_prior_findings(tmp_path, monkeypatch):
+    ctx, runner, _, output = budget_context(tmp_path, monkeypatch, timeout=30)
+    monkeypatch.setattr(parser, "MAX_TOTAL_OUTPUT_BYTES", len(output.encode()))
+    findings, count, reason = shell_observations(ctx, ctx.files)
+    assert count == 1 and findings[0].rule == "shell.eval" and len(runner.calls) == 2
+    assert "output byte budget exhausted; omitted 2 eligible files" in reason
+    assert runner.calls[-1][1]["output_limit"] == len(output.encode())
+
+
+def test_output_exhaustion_mid_file_cannot_accept_oversized_tree(tmp_path, monkeypatch):
+    ctx, runner, _, output = budget_context(tmp_path, monkeypatch, timeout=30)
+    monkeypatch.setattr(parser, "MAX_TOTAL_OUTPUT_BYTES", len(output.encode()) + 1)
+    stage = analyze_shell_syntax(ctx)
+    assert stage.status == "limited" and stage.analyzed_files == 1 and stage.eligible_files == 3
+    assert runner.calls[-1][1]["output_limit"] == 1
+    assert "output byte limit exceeded: b.sh" in stage.reason
+    assert "output byte budget exhausted; omitted 1 eligible files" in stage.reason
+
+
+def test_native_cumulative_deadline_bounds_selected_files(tmp_path):
+    files = {f"{i}.sh": "#!/bin/bash\nprintf ok\n" for i in range(20)}
+    ctx = replace(context(tmp_path, files), timeout=0.05)
+    start = time.monotonic()
+    stage = analyze_shell_syntax(ctx)
+    elapsed = time.monotonic() - start
+    assert elapsed < 1, elapsed
+    assert stage.status != "ok" and stage.analyzed_files < stage.eligible_files == 20
+    assert "time budget exhausted" in stage.reason, stage.reason
