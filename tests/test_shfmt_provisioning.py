@@ -2,7 +2,6 @@
 
 import hashlib
 import importlib.util
-import io
 from pathlib import Path
 from unittest.mock import patch
 
@@ -111,43 +110,18 @@ def test_both_assets_verified_before_executable_write(monkeypatch, tmp_path):
     assert not list(destination.glob(".shfmt-*"))
 
 
-class Response(io.BytesIO):
-    """Bounded fake HTTPS response with the same redirect inspection API."""
-
-    def __init__(self, data, url="https://github.com/official"):
-        super().__init__(data)
-        self.url = url
-
-    def geturl(self):
-        return self.url
-
-
-@pytest.mark.parametrize(
-    "data,url,message",
-    [
-        (b"x" * 11, "https://github.com/official", "byte limit"),
-        (b"x", "http://unsafe", "HTTPS"),
-    ],
-)
-def test_download_caps_and_https(monkeypatch, data, url, message):
-    monkeypatch.setattr(
-        helper.urllib.request, "urlopen", lambda *a, **k: Response(data, url)
-    )
-    with pytest.raises(ValueError, match=message):
-        helper.download("https://github.com/official", 10)
-
-
-def test_download_timeout_is_explicit(monkeypatch):
+def test_download_uses_shared_supervised_boundary(monkeypatch):
     calls = []
 
-    def open_response(url, **kwargs):
-        calls.append(kwargs)
-        raise TimeoutError("bounded timeout")
+    class Transfer:
+        @staticmethod
+        def download(url, limit):
+            calls.append((url, limit))
+            return b"bounded fixture"
 
-    monkeypatch.setattr(helper.urllib.request, "urlopen", open_response)
-    with pytest.raises(TimeoutError):
-        helper.download("https://github.com/official", 10)
-    assert calls == [{"timeout": 60}]
+    monkeypatch.setattr(helper, "transfer_helper", lambda: Transfer)
+    assert helper.download("https://github.com/official", 10) == b"bounded fixture"
+    assert calls == [("https://github.com/official", 10)]
 
 
 def test_partial_publication_error_keeps_old_binary_and_cleans_staging(

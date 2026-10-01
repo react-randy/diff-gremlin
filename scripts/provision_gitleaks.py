@@ -2,11 +2,28 @@
 
 import argparse
 import hashlib
+import importlib.util
 import io
 import platform
 import tarfile
-import urllib.request
 from pathlib import Path
+
+
+def transfer_helper():
+    """Load only the verified sibling, including under isolated Python (-I)."""
+    directory = Path(__file__).resolve().parent
+    path = directory / "download_asset.py"
+    if not path.is_file() or path.resolve().parent != directory:
+        raise ValueError(
+            "verified sibling download_asset.py is missing or outside scripts"
+        )
+    spec = importlib.util.spec_from_file_location("_owned_asset_download", path)
+    if spec is None or spec.loader is None:
+        raise ValueError("verified sibling download_asset.py could not be loaded")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
 
 VERSION = "8.30.1"
 ARCHIVES = {
@@ -35,11 +52,7 @@ def download(name: str) -> bytes:
         f"https://github.com/gitleaks/gitleaks/releases/download/v{VERSION}/"
         f"gitleaks_{VERSION}_{name}.tar.gz"
     )
-    with urllib.request.urlopen(url, timeout=60) as response:
-        data = response.read(32 * 1024 * 1024 + 1)
-    if len(data) > 32 * 1024 * 1024:
-        raise ValueError("Gitleaks archive exceeds the 32 MiB download limit")
-    return data
+    return transfer_helper().download(url, 32 * 1024 * 1024)
 
 
 def verify(data: bytes, name: str) -> None:
