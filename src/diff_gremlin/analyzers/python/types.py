@@ -7,7 +7,7 @@ from functools import partial
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from diff_gremlin.analyzers.locations import relative_location
+from diff_gremlin.analyzers.locations import SourceLocations
 from diff_gremlin.analyzers.python.schema import (
     count,
     json_value,
@@ -33,11 +33,12 @@ def _diagnostics(
     ctx: ScanContext, files: tuple[SourceFile, ...], text: str
 ) -> tuple[list[Finding], int, int]:
     values = list_value(object_value(json_value(text)).get("errors"))
+    locations = SourceLocations(ctx.root, files)
     findings = []
     errors = warnings = 0
     for value in values:
         item = object_value(value)
-        path = relative_location(ctx.root, item.get("path"), files)
+        path = locations.relative(item.get("path"))
         line, column = count(item.get("line")), count(item.get("column"))
         name, severity = item.get("name"), item.get("severity")
         if (

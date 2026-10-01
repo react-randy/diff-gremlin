@@ -5,7 +5,7 @@ import sys
 from functools import partial
 from pathlib import Path
 
-from diff_gremlin.analyzers.locations import relative_location
+from diff_gremlin.analyzers.locations import SourceLocations
 from diff_gremlin.analyzers.python.schema import json_value, number, object_value
 from diff_gremlin.analyzers.status import execution_status, unavailable
 from diff_gremlin.domain.context import ScanContext, SourceFile
@@ -22,9 +22,10 @@ def _indices(
     version = report.get("version")
     if not isinstance(version, str) or not re.fullmatch(r"\d+\.\d+\.\d+", version):
         raise ValueError("invalid Radon version identity")
+    locations = SourceLocations(ctx.root, files)
     rows = {}
     for location, value in object_value(report.get("files")).items():
-        path = relative_location(ctx.root, location, files)
+        path = locations.relative(location)
         item = object_value(value)
         rows[path] = number(item.get("mi"))
     if set(rows) != {file.relative_path for file in files}:

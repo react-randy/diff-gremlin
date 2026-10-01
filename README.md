@@ -11,8 +11,7 @@ you evidence. No model or API key required. It cannot guess who wrote your code.
 
 ## Install
 
-The v1.0.0 installer and container commands below require the published release.
-During release preparation, use the [source installation](docs/installation.md#from-source).
+Install the pinned v1.0.0 release:
 
 ```sh
 curl -fsSL https://github.com/react-randy/diff-gremlin/releases/download/v1.0.0/install.sh | sh
@@ -116,7 +115,7 @@ syntax can limit static type evidence; the report says so.
 
 [Install](docs/installation.md) · [Usage](docs/usage.md) ·
 [Develop](docs/development.md) · [Architecture](docs/architecture.md) ·
-[Migration](docs/migration.md)
+[Migration](docs/migration.md) · [Field tests](docs/field-validation.md)
 
 MIT. Derived from [nexus-marbell/vibe-check](https://github.com/nexus-marbell/vibe-check/tree/170bd72b96546a8f206ce907d807e61447df1535);
 original Marbell AG attribution is preserved in [LICENSE](LICENSE).

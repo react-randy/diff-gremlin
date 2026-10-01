@@ -18,6 +18,11 @@ A ref selects a Git object without switching your checkout. Repository URLs must
 use supported HTTPS forms. Scans run on disposable snapshots and leave your
 branch, index, working tree, and global Git configuration unchanged.
 
+Git snapshots containing submodules (gitlinks) or unsupported object modes are
+refused before analysis. To scan explicitly materialized submodule contents, supply
+a local directory snapshot without `--ref`; its identity describes current files.
+The checker does not initialize submodules or run their hooks.
+
 The default is full. Files outside the bounded source inventory, unreadable
 files, omitted stages, unsupported syntax, and missing tools are disclosed in
 the report. “No findings” is useful only together with the observed coverage.

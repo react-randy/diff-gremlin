@@ -306,11 +306,13 @@ def analyze_js_duplication(ctx: ScanContext) -> StageResult:
                 status=failure_status(result),
             )
         metrics, findings, count = observations
-    except (OSError, ValueError, TypeError):
+    except OSError:
         return absent(
-            "jscpd report missing, unreadable, or schema/coverage invalid for this invocation",
+            "jscpd evidence could not be read; source/report paths are omitted",
             status="failed",
         )
+    except (ValueError, TypeError) as error:
+        return absent(f"jscpd native evidence invalid: {error}", status="failed")
     return StageResult(
         _ID,
         _LABEL,

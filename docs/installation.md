@@ -6,8 +6,9 @@ to see actual installed capabilities before scanning. Git must be installed for
 repository URLs, refs, comparisons, and history; the curl installer does not
 install system packages.
 
-Release commands require v1.0.0 assets/image to exist. A source installation is
-available during release preparation. Nothing here assumes a PyPI publication.
+Commands below use versioned GitHub release assets and the GHCR image. Nothing
+here assumes a PyPI publication. A [source installation](#from-source) is also
+available for development.
 
 ## Curl installer
 

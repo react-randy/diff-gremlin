@@ -2,7 +2,7 @@
 
 from functools import partial
 
-from diff_gremlin.analyzers.locations import relative_location
+from diff_gremlin.analyzers.locations import SourceLocations
 from diff_gremlin.analyzers.python.schema import (
     count,
     json_value,
@@ -21,11 +21,12 @@ _ID = "python.lint.ruff"
 def _findings(
     ctx: ScanContext, files: tuple[SourceFile, ...], stdout: str
 ) -> list[Finding]:
+    locations = SourceLocations(ctx.root, files)
     findings = []
     for value in list_value(json_value(stdout)):
         item = object_value(value)
         location = object_value(item.get("location"))
-        path = relative_location(ctx.root, item.get("filename"), files)
+        path = locations.relative(item.get("filename"))
         line, column = count(location.get("row")), count(location.get("column"))
         if line < 1 or column < 1 or not isinstance(item.get("message"), str):
             raise ValueError("invalid Ruff diagnostic")

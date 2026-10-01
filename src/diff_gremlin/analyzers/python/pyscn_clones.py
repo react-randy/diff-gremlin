@@ -1,16 +1,16 @@
 """Extract validated duplication percentage and located PyScn clone groups."""
 
-from diff_gremlin.analyzers.locations import relative_location
+from diff_gremlin.analyzers.locations import SourceLocations
 from diff_gremlin.analyzers.python.schema import count, list_value, number, object_value
 from diff_gremlin.domain.context import ScanContext, SourceFile
 from diff_gremlin.domain.findings import Finding
 
 
 def _clone_fragment(
-    ctx: ScanContext, files: tuple[SourceFile, ...], identity: int, fragment: object
+    locations: SourceLocations, identity: int, fragment: object
 ) -> Finding:
     location = object_value(object_value(fragment).get("location"))
-    path = relative_location(ctx.root, location.get("file_path"), files)
+    path = locations.relative(location.get("file_path"))
     start, end = (
         count(location.get("start_line")),
         count(location.get("end_line")),
@@ -29,6 +29,7 @@ def _clone_fragment(
 def _group_findings(
     ctx: ScanContext, files: tuple[SourceFile, ...], groups: list
 ) -> list[Finding]:
+    locations = SourceLocations(ctx.root, files)
     findings = []
     seen_ids = set()
     for value in groups:
@@ -41,7 +42,7 @@ def _group_findings(
         if len(fragments) < 2:
             raise ValueError("clone group has fewer than two fragments")
         for fragment in fragments:
-            findings.append(_clone_fragment(ctx, files, identity, fragment))
+            findings.append(_clone_fragment(locations, identity, fragment))
     return findings
 
 
