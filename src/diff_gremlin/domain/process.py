@@ -30,4 +30,5 @@ class Runner(Protocol):
         env: Mapping[str, str] | None = None,
         output_limit: int = 4 * 1024 * 1024,
         input_text: str | None = None,
+        data_output: bool = False,
     ) -> RunResult: ...

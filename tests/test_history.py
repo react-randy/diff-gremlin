@@ -14,9 +14,7 @@ _BLOB = "b" * 40
 
 
 class HistoryRunner:
-    def __init__(
-        self, *, shallow=False, empty=False, content="def f():\n    return 1\n"
-    ):
+    def __init__(self, *, shallow=False, empty=False, content="def f():\n    return 1\n"):
         self.shallow = shallow
         self.empty = empty
         self.content = content
@@ -71,15 +69,9 @@ def test_history_single_and_shallow_are_limited(tmp_path):
         and result.metrics["measure"] == "python-ast-decision-complexity-v1"
     )
     assert result.metrics["revision"] == _SHA and "One commit" in result.reason
-    assert not any(
-        "checkout" in command or "wily" in command for command, _ in runner.calls
-    )
+    assert not any("checkout" in command or "wily" in command for command, _ in runner.calls)
     result = analyze_history(make_context(tmp_path, HistoryRunner(shallow=True)))
-    assert (
-        result.status == "limited"
-        and result.metrics["shallow"]
-        and "Shallow" in result.reason
-    )
+    assert result.status == "limited" and result.metrics["shallow"] and "Shallow" in result.reason
 
 
 def test_empty_repository_is_not_clean_history(tmp_path):
@@ -98,19 +90,14 @@ def test_invalid_historical_source_is_not_zero(tmp_path, content):
 @pytest.mark.parametrize("limit", [0, 51, -1, True, "10"])
 def test_history_limit_validated_without_git(tmp_path, limit):
     runner = HistoryRunner()
-    assert (
-        analyze_history(make_context(tmp_path, runner), limit=limit).status == "failed"
-    )
+    assert analyze_history(make_context(tmp_path, runner), limit=limit).status == "failed"
     assert not runner.calls
 
 
 @pytest.mark.parametrize("revision", ["HEAD", "-x", "a" * 12, "z" * 40, True])
 def test_history_rejects_ambiguous_revision_without_git(tmp_path, revision):
     runner = HistoryRunner()
-    assert (
-        analyze_history(make_context(tmp_path, runner), revision=revision).status
-        == "failed"
-    )
+    assert analyze_history(make_context(tmp_path, runner), revision=revision).status == "failed"
     assert not runner.calls
 
 
@@ -187,9 +174,7 @@ def test_native_rising_stable_bounded_history_and_exact_revision(tmp_path):
     assert [row["max_cc"] for row in result.metrics["rows"]] == [1, 2, 2]
     assert [row["average_cc"] for row in result.metrics["rows"]] == [1.0, 2.0, 2.0]
     previous = analyze_history(ctx, limit=1, revision=second)
-    assert (
-        previous.metrics["rows"][0]["commit"] == second and previous.status == "limited"
-    )
+    assert previous.metrics["rows"][0]["commit"] == second and previous.status == "limited"
     assert (
         git(ctx.root, "rev-parse", "HEAD") == final
         and git(ctx.root, "status", "--porcelain") == before
@@ -229,3 +214,16 @@ def test_native_historical_config_is_data(tmp_path):
     final = commit(ctx.root, "def f(x):\n    if x:\n        return 1\n    return 0\n")
     result = analyze_history(ctx, revision=final)
     assert result.status == "ok" and result.metrics["rows"][-1]["functions"] == 1
+
+
+def test_real_runner_preserves_credential_shaped_source_blob(tmp_path):
+    from diff_gremlin.process import run
+
+    ctx = make_context(tmp_path, run)
+    git(ctx.root, "init", "--initial-branch=main")
+    source = 'def endpoint():\n    return "https://user:fake@example.invalid/path"\n'
+    commit(ctx.root, source)
+    final = commit(ctx.root, source + "# second immutable observation\n")
+    result = analyze_history(ctx, revision=final)
+    assert result.status == "ok" and result.metrics["commit_count"] == 2
+    assert [row["max_cc"] for row in result.metrics["rows"]] == [1, 1]

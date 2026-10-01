@@ -38,9 +38,7 @@ def test_one_cc_per_function_located_hotspot(tmp_path):
 
 
 def test_valid_zero_functions_distinct_from_missing_output(tmp_path):
-    stage = analyze_complexity(
-        make_context(tmp_path, FakeRunner(xml()), {"a.py": "value = 1\n"})
-    )
+    stage = analyze_complexity(make_context(tmp_path, FakeRunner(xml()), {"a.py": "value = 1\n"}))
     assert stage.status == "ok" and stage.metrics["functions"] == 0
     assert stage.metrics["max_cc"] == 0 and stage.analyzed_files == 1
     stage = analyze_complexity(make_context(tmp_path, FakeRunner("")))
@@ -66,9 +64,7 @@ def test_valid_zero_functions_distinct_from_missing_output(tmp_path):
 )
 def test_invalid_or_partial_output_never_clean(tmp_path, text):
     stage = analyze_complexity(make_context(tmp_path, FakeRunner(text)))
-    assert (
-        stage.status == "failed" and stage.metrics == {} and stage.analyzed_files == 0
-    )
+    assert stage.status == "failed" and stage.metrics == {} and stage.analyzed_files == 0
 
 
 @pytest.mark.parametrize(
@@ -89,13 +85,9 @@ def test_failed_lizard_execution(tmp_path, status, code):
 
 def test_only_supported_production_files_eligible(tmp_path):
     runner = FakeRunner(xml())
-    ctx = make_context(
-        tmp_path, runner, {"a.py": "value = 1\n", "unknown.txt": "uncovered"}
-    )
+    ctx = make_context(tmp_path, runner, {"a.py": "value = 1\n", "unknown.txt": "uncovered"})
     stage = analyze_complexity(ctx)
-    assert (
-        stage.status == "ok" and stage.eligible_files == 1 and stage.analyzed_files == 1
-    )
+    assert stage.status == "ok" and stage.eligible_files == 1 and stage.analyzed_files == 1
 
 
 @pytest.mark.parametrize(
@@ -112,8 +104,6 @@ def test_only_supported_production_files_eligible(tmp_path):
             "a.go",
             "package main\nfunc choose(x bool) int { if x { return 1 }; return 0 }",
         ),
-        ("a.ts", "function choose(x: boolean): number { if (x) return 1; return 0; }"),
-        ("a.js", "function choose(x) { if (x) return 1; return 0; }"),
         ("a.rb", "def choose(x)\n if x\n  return 1\n end\n return 0\nend"),
         ("a.swift", "func choose(_ x: Bool) -> Int { if x { return 1 }; return 0 }"),
         ("a.lua", "function choose(x)\n if x then return 1 end\n return 0\nend"),
@@ -123,9 +113,7 @@ def test_only_supported_production_files_eligible(tmp_path):
 def test_native_supported_language_function_once(tmp_path, filename, source):
     if shutil.which("lizard") is None:
         pytest.skip("optional native pilot requires installed lizard")
-    stage = analyze_complexity(
-        make_context(tmp_path, native_runner, {filename: source})
-    )
+    stage = analyze_complexity(make_context(tmp_path, native_runner, {filename: source}))
     assert stage.status == "ok", stage.reason
     assert (
         stage.metrics["functions"] == 1
@@ -138,24 +126,16 @@ def test_native_file_with_no_functions_and_path_spaces(tmp_path):
     if shutil.which("lizard") is None:
         pytest.skip("optional native pilot requires installed lizard")
     stage = analyze_complexity(
-        make_context(
-            tmp_path, native_runner, {"folder with spaces/a.py": "value = 1\n"}
-        )
+        make_context(tmp_path, native_runner, {"folder with spaces/a.py": "value = 1\n"})
     )
-    assert (
-        stage.status == "ok"
-        and stage.metrics["functions"] == 0
-        and stage.analyzed_files == 1
-    )
+    assert stage.status == "ok" and stage.metrics["functions"] == 0 and stage.analyzed_files == 1
 
 
 def test_native_scala_parser_gap_is_visible(tmp_path):
     if shutil.which("lizard") is None:
         pytest.skip("optional native pilot requires installed lizard")
     source = "object Example { def choose(x: Boolean): Int = { if (x) 1 else 0 } }"
-    stage = analyze_complexity(
-        make_context(tmp_path, native_runner, {"a.scala": source})
-    )
+    stage = analyze_complexity(make_context(tmp_path, native_runner, {"a.scala": source}))
     assert stage.status == "limited" and "Scala" in stage.reason
     assert "max_cc" not in stage.metrics and "average_cc" not in stage.metrics
 

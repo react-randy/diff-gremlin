@@ -39,6 +39,7 @@ class ScanContext:
         timeout: float | None = None,
         output_limit: int = 4 * 1024 * 1024,
         input_text: str | None = None,
+        data_output: bool = False,
     ) -> RunResult:
         """Apply this scan's execution deadline to an installed tool."""
         return self.runner(
@@ -47,4 +48,5 @@ class ScanContext:
             timeout=timeout if timeout is not None else self.timeout,
             output_limit=output_limit,
             input_text=input_text,
+            data_output=data_output,
         )

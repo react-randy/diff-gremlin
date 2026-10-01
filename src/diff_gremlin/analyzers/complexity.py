@@ -15,12 +15,6 @@ SUPPORTED_SUFFIXES = frozenset(
     {
         ".py",
         ".java",
-        ".js",
-        ".cjs",
-        ".mjs",
-        ".jsx",
-        ".ts",
-        ".tsx",
         ".c",
         ".h",
         ".cpp",
@@ -47,9 +41,7 @@ SUPPORTED_SUFFIXES = frozenset(
 )
 
 
-def _complexity_metrics(
-    functions: list[dict], is_limited: bool
-) -> tuple[dict, list[dict]]:
+def _complexity_metrics(functions: list[dict], is_limited: bool) -> tuple[dict, list[dict]]:
     values = [row["cc"] for row in functions]
     hotspots = sorted(
         (row for row in functions if row["cc"] > 10),
@@ -81,9 +73,7 @@ def _hotspot_findings(hotspots: list[dict]) -> list[Finding]:
 
 def analyze_complexity(ctx: ScanContext) -> StageResult:
     files = tuple(
-        file
-        for file in ctx.production_files
-        if file.path.suffix.lower() in SUPPORTED_SUFFIXES
+        file for file in ctx.production_files if file.path.suffix.lower() in SUPPORTED_SUFFIXES
     )
     failure = partial(
         unavailable,
@@ -94,9 +84,7 @@ def analyze_complexity(ctx: ScanContext) -> StageResult:
         eligible_files=len(files),
     )
     if not files:
-        return failure(
-            reason="No production files supported by Lizard", status="unsupported"
-        )
+        return failure(reason="No production files supported by Lizard", status="unsupported")
     result = ctx.run(
         [
             "lizard",
@@ -111,9 +99,7 @@ def analyze_complexity(ctx: ScanContext) -> StageResult:
     )
     status = execution_status(result, (0,))
     if status is not None:
-        return failure(
-            reason="Lizard execution did not complete valid analysis", status=status
-        )
+        return failure(reason="Lizard execution did not complete valid analysis", status=status)
     try:
         functions = observations(ctx, files, result.stdout)
     except (
@@ -126,9 +112,7 @@ def analyze_complexity(ctx: ScanContext) -> StageResult:
         SyntaxError,
         RecursionError,
     ):
-        return failure(
-            reason="Lizard output failed schema or coverage validation", status="failed"
-        )
+        return failure(reason="Lizard output failed schema or coverage validation", status="failed")
     is_limited = any(file.path.suffix.lower() == ".scala" for file in files)
     metrics, hotspots = _complexity_metrics(functions, is_limited)
     return StageResult(

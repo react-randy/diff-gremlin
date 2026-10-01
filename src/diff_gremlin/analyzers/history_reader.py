@@ -30,9 +30,7 @@ class HistoryReader:
         self.repo = repo
         self.deadline = time.monotonic() + ctx.timeout
 
-    def git(
-        self, *args: str, input_text: str | None = None, allow_missing: bool = False
-    ) -> str:
+    def git(self, *args: str, input_text: str | None = None, allow_missing: bool = False) -> str:
         remaining = self.deadline - time.monotonic()
         if remaining <= 0:
             raise TimeoutError("bounded history deadline expired")
@@ -52,13 +50,9 @@ class HistoryReader:
             cwd=self.ctx.scratch,
             timeout=remaining,
             input_text=input_text,
+            data_output=bool(args and args[0] == "cat-file"),
         )
-        if (
-            allow_missing
-            and result.status == "ok"
-            and result.returncode == 1
-            and not result.stdout
-        ):
+        if allow_missing and result.status == "ok" and result.returncode == 1 and not result.stdout:
             return ""
         if result.status != "ok" or result.returncode != 0:
             if result.status == "missing":
@@ -70,10 +64,7 @@ class HistoryReader:
 
     def is_repository(self) -> bool:
         inside = self.git("rev-parse", "--is-inside-work-tree").strip()
-        return (
-            inside == "true"
-            or self.git("rev-parse", "--is-bare-repository").strip() == "true"
-        )
+        return inside == "true" or self.git("rev-parse", "--is-bare-repository").strip() == "true"
 
     def is_shallow(self) -> bool:
         value = self.git("rev-parse", "--is-shallow-repository").strip()

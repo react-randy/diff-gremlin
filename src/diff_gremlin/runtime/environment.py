@@ -24,8 +24,11 @@ def redact(text: str, env: Mapping[str, str] | None = None) -> str:
 def trusted_path(cwd: Path | None = None) -> str:
     """Exclude relative search paths and executable directories inside the target."""
     root = cwd.resolve() if cwd else None
-    candidates = [str(Path(sys.executable).parent), *os.defpath.split(os.pathsep)]
-    candidates.extend(os.environ.get("DIFF_GREMLIN_TOOL_PATH", "").split(os.pathsep))
+    candidates = [
+        str(Path(sys.executable).parent),
+        *os.environ.get("DIFF_GREMLIN_TOOL_PATH", "").split(os.pathsep),
+        *os.defpath.split(os.pathsep),
+    ]
     paths = []
     for entry in candidates:
         directory = Path(entry)
@@ -69,7 +72,7 @@ def _executable(name: str, cwd: Path | None, path: str) -> str | None:
             path == cwd.resolve() or cwd.resolve() in path.parents for path in (resolved, lexical)
         ):
             return None
-        return str(resolved)
+        return str(lexical)
     if candidate.name != name:
         return None
     executable = shutil.which(name, path=path)

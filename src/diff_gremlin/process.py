@@ -18,8 +18,15 @@ def run(
     env: Mapping[str, str] | None = None,
     output_limit: int = 4194304,
     input_text: str | None = None,
+    data_output: bool = False,
 ) -> RunResult:
     """Run a trusted installed executable without a shell or target configuration."""
     return _execute(
-        command, cwd=cwd, timeout=timeout, env=env, output_limit=output_limit, input_text=input_text
+        command,
+        cwd=cwd,
+        timeout=timeout,
+        env=env,
+        output_limit=output_limit,
+        input_text=input_text,
+        protect_stdout=not data_output,
     )
