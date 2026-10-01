@@ -76,5 +76,5 @@ def located_findings(
 ) -> list[Finding]:
     """Use generated messages because source diagnostics may contain credentials."""
     paths = {str(file.path.resolve()): file.relative_path for file in files}
-    coordinates = SourceCoordinates()
+    coordinates = SourceCoordinates(files)
     return [_located_row(row, paths, coordinates, kind) for row in rows]

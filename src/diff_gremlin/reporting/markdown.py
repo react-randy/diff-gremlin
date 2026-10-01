@@ -1,4 +1,4 @@
-"""Readable repository receipts with every stage and finding."""
+"""Readable repository summaries with every stage and prioritized findings."""
 
 from diff_gremlin.domain.reports import ScanReport
 from diff_gremlin.policy.metrics import stage_score

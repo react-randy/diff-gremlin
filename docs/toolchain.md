@@ -24,7 +24,8 @@ The package needs no model API or model-specific configuration.
 
 Mixed repositories retain distinct stage IDs. Unsupported languages can receive
 applicable inventory/security/hygiene evidence; this is not a full lint/type check
-for every language. Required gaps make the score unknown. A shipped binary's
+for every language. Required gaps keep the strict score unknown; provisional
+observed scores show their measured stage/category scope. A shipped binary's
 availability does not prove that a target's imports or syntax can be fully analyzed.
 
 ## Shell evidence
@@ -151,7 +152,9 @@ script operands and runtime reachability remain unresolved. Windows interpreter
 forms have static fixture coverage, without a claim of Windows runtime testing.
 
 Located JS/TS and JDK diagnostics must fit the invocation's copied source. Each
-located report has one cumulative 4-MiB source-read budget. JavaScript coordinates
+located report uses the captured source sizes, an 8-MiB per-file read bound,
+a 256-MiB cumulative read bound, and a separate two-million-line cache bound.
+Read sizes must match the captured inventory. JavaScript coordinates
 use UTF-16 units and native line separators; compiler/lint BOM handling is distinct
 from the syntax observer. JDK columns include eight-column tab stops, with
 separate tree and diagnostic EOF conventions. Unreadable sources, invalid
