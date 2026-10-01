@@ -32,6 +32,20 @@ def _indices(
     return version, rows
 
 
+def _low_index_findings(indices: dict[str, float]) -> list[Finding]:
+    findings = [
+        Finding(
+            rule="radon.low-mi",
+            message=f"Maintainability index is {value:.1f}",
+            severity="info",
+            path=path,
+        )
+        for path, value in sorted(indices.items())
+        if value < 20
+    ]
+    return findings
+
+
 def analyze_maintainability(ctx: ScanContext) -> StageResult:
     files = tuple(file for file in ctx.production_files if file.language == "python")
     failure = partial(
@@ -68,16 +82,6 @@ def analyze_maintainability(ctx: ScanContext) -> StageResult:
             reason="Radon MI output failed schema or coverage validation",
             status="failed",
         )
-    findings = [
-        Finding(
-            rule="radon.low-mi",
-            message=f"Maintainability index is {value:.1f}",
-            severity="info",
-            path=path,
-        )
-        for path, value in sorted(indices.items())
-        if value < 20
-    ]
     return StageResult(
         _ID,
         "Python maintainability",
@@ -86,7 +90,7 @@ def analyze_maintainability(ctx: ScanContext) -> StageResult:
         "radon",
         version=version,
         metrics={"average_mi": sum(indices.values()) / len(indices)},
-        findings=findings,
+        findings=_low_index_findings(indices),
         required=False,
         analyzed_files=len(files),
         eligible_files=len(files),

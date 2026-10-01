@@ -6,6 +6,45 @@ from diff_gremlin.domain.context import ScanContext, SourceFile
 from diff_gremlin.domain.findings import Finding
 
 
+def _clone_fragment(
+    ctx: ScanContext, files: tuple[SourceFile, ...], identity: int, fragment: object
+) -> Finding:
+    location = object_value(object_value(fragment).get("location"))
+    path = relative_location(ctx.root, location.get("file_path"), files)
+    start, end = (
+        count(location.get("start_line")),
+        count(location.get("end_line")),
+    )
+    if start < 1 or end < start:
+        raise ValueError("invalid clone fragment location")
+    return Finding(
+        rule="pyscn.clone",
+        message=f"Code participates in clone group {identity}",
+        severity="low",
+        path=path,
+        line=start,
+    )
+
+
+def _group_findings(
+    ctx: ScanContext, files: tuple[SourceFile, ...], groups: list
+) -> list[Finding]:
+    findings = []
+    seen_ids = set()
+    for value in groups:
+        group = object_value(value)
+        identity = count(group.get("id"))
+        if identity in seen_ids:
+            raise ValueError("duplicate PyScn clone group identity")
+        seen_ids.add(identity)
+        fragments = list_value(group.get("clones"))
+        if len(fragments) < 2:
+            raise ValueError("clone group has fewer than two fragments")
+        for fragment in fragments:
+            findings.append(_clone_fragment(ctx, files, identity, fragment))
+    return findings
+
+
 def clone_observations(
     ctx: ScanContext, files: tuple[SourceFile, ...], data: dict
 ) -> tuple[dict, list[Finding]]:
@@ -25,33 +64,6 @@ def clone_observations(
     groups = list_value(clone.get("clone_groups"))
     if len(groups) != expected or count(stats.get("total_clone_groups")) != expected:
         raise ValueError("PyScn clone group count differs from report rows")
-    findings = []
-    seen_ids = set()
-    for value in groups:
-        group = object_value(value)
-        identity = count(group.get("id"))
-        if identity in seen_ids:
-            raise ValueError("duplicate PyScn clone group identity")
-        seen_ids.add(identity)
-        fragments = list_value(group.get("clones"))
-        if len(fragments) < 2:
-            raise ValueError("clone group has fewer than two fragments")
-        for fragment in fragments:
-            location = object_value(object_value(fragment).get("location"))
-            path = relative_location(ctx.root, location.get("file_path"), files)
-            start, end = (
-                count(location.get("start_line")),
-                count(location.get("end_line")),
-            )
-            if start < 1 or end < start:
-                raise ValueError("invalid clone fragment location")
-            findings.append(
-                Finding(
-                    rule="pyscn.clone",
-                    message=f"Code participates in clone group {identity}",
-                    severity="low",
-                    path=path,
-                    line=start,
-                )
-            )
-    return {"duplication_percent": percent, "clone_groups": expected}, findings
+    return {"duplication_percent": percent, "clone_groups": expected}, _group_findings(
+        ctx, files, groups
+    )

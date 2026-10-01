@@ -4,7 +4,7 @@ import re
 
 from diff_gremlin.domain.context import ScanContext
 
-_VERSION = re.compile(r"\b\d+\.\d+(?:\.\d+)?(?:[-+][A-Za-z0-9.]+)?\b")
+_VERSION = re.compile(r"\b\d+(?:\.\d+)+(?:[-+][A-Za-z0-9.]+)?\b")
 
 
 def tool_version(ctx: ScanContext, executable: str) -> str:

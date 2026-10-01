@@ -12,6 +12,7 @@ from diff_gremlin.analyzers.python.maintainability import analyze_maintainabilit
 from diff_gremlin.analyzers.python.pyscn import analyze_pyscn
 from diff_gremlin.analyzers.python.ruff import analyze_ruff
 from diff_gremlin.analyzers.python.types import analyze_python_types
+from diff_gremlin.analyzers.versions import tool_version
 from diff_gremlin.domain.context import ScanContext, SourceFile
 from diff_gremlin.domain.process import RunResult
 
@@ -537,3 +538,27 @@ def test_empty_python_inventory_is_not_passing(tmp_path):
             stage.status == "unsupported" and stage.metrics == {} for stage in stages
         )
         assert not runner.calls
+
+
+@pytest.mark.parametrize("version", ["25.0.4.1", "1.24.0", "1.3.0-beta.2", "0.16.8"])
+def test_tool_version_preserves_full_numeric_identity(tmp_path, version):
+    calls = []
+
+    def runner(command, **kwargs):
+        calls.append((list(command), kwargs))
+        return RunResult(tuple(command), 0, f"javac {version}\n")
+
+    ctx = make_context(tmp_path, runner)
+    assert tool_version(ctx, "javac") == version
+    assert calls[0][0] == ["javac", "--version"]
+    assert calls[0][1]["cwd"] == ctx.scratch
+
+
+@pytest.mark.parametrize(
+    "status,code", [("failed", 1), ("timeout", None), ("missing", None), ("ok", 1)]
+)
+def test_tool_version_rejects_failed_identity_output(tmp_path, status, code):
+    def runner(command, **kwargs):
+        return RunResult(tuple(command), code, "javac 25.0.4.1", status=status)
+
+    assert tool_version(make_context(tmp_path, runner), "javac") == ""

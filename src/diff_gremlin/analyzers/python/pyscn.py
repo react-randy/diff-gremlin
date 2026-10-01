@@ -9,7 +9,8 @@ from diff_gremlin.analyzers.python.pyscn_deadcode import deadcode_observations
 from diff_gremlin.analyzers.python.schema import json_value, number, object_value
 from diff_gremlin.analyzers.status import execution_status, unavailable
 from diff_gremlin.analyzers.versions import tool_version
-from diff_gremlin.domain.context import ScanContext
+from diff_gremlin.domain.context import ScanContext, SourceFile
+from diff_gremlin.domain.process import RunResult
 from diff_gremlin.domain.stages import Category, StageResult, StageStatus
 
 _CAPABILITIES: tuple[tuple[str, str, Category, bool], ...] = (
@@ -48,47 +49,35 @@ def _health(data: dict) -> tuple[dict, list]:
     }, []
 
 
-def analyze_pyscn(ctx: ScanContext) -> list[StageResult]:
-    files = tuple(file for file in ctx.production_files if file.language == "python")
-    if not files:
-        return _unobserved("No production Python files", "unsupported", 0)
-    try:
-        with TemporaryDirectory(prefix="pyscn-", dir=ctx.scratch) as directory:
-            config = Path(directory) / "pyscn.toml"
-            config.write_text("", encoding="utf-8")
-            result = ctx.run(
-                [
-                    "pyscn",
-                    "analyze",
-                    "--config",
-                    str(config),
-                    "--json",
-                    "--output",
-                    "-",
-                    "--no-open",
-                    "--",
-                    *(str(file.path) for file in files),
-                ],
-                cwd=ctx.scratch,
-            )
-    except OSError:
-        return _unobserved(
-            "Could not create controlled PyScn configuration", "failed", len(files)
+def _run_pyscn(ctx: ScanContext, files: tuple[SourceFile, ...]) -> RunResult:
+    with TemporaryDirectory(prefix="pyscn-", dir=ctx.scratch) as directory:
+        config = Path(directory) / "pyscn.toml"
+        config.write_text("", encoding="utf-8")
+        return ctx.run(
+            [
+                "pyscn",
+                "analyze",
+                "--config",
+                str(config),
+                "--json",
+                "--output",
+                "-",
+                "--no-open",
+                "--",
+                *(str(file.path) for file in files),
+            ],
+            cwd=ctx.scratch,
         )
-    status = execution_status(result, (0,))
-    if status is not None:
-        return _unobserved(
-            "PyScn execution did not complete valid analysis", status, len(files)
-        )
-    try:
-        data = object_value(json_value(result.stdout))
-        analyzed, partial = coverage(ctx, files, data)
-    except (ValueError, TypeError):
-        return _unobserved(
-            "PyScn output failed snapshot schema or coverage validation",
-            "failed",
-            len(files),
-        )
+
+
+def _component_stages(
+    ctx: ScanContext,
+    files: tuple[SourceFile, ...],
+    data: dict,
+    analyzed: int,
+    partial: bool,
+    duration: float,
+) -> list[StageResult]:
     version = tool_version(ctx, "pyscn")
     parsers = (
         lambda: _health(data),
@@ -129,7 +118,36 @@ def analyze_pyscn(ctx: ScanContext) -> list[StageResult]:
                 analyzed_files=analyzed,
                 eligible_files=len(files),
                 reason="PyScn skipped eligible Python files" if partial else "",
-                duration_seconds=result.duration_seconds,
+                duration_seconds=duration,
             )
         )
     return stages
+
+
+def analyze_pyscn(ctx: ScanContext) -> list[StageResult]:
+    files = tuple(file for file in ctx.production_files if file.language == "python")
+    if not files:
+        return _unobserved("No production Python files", "unsupported", 0)
+    try:
+        result = _run_pyscn(ctx, files)
+    except OSError:
+        return _unobserved(
+            "Could not create controlled PyScn configuration", "failed", len(files)
+        )
+    status = execution_status(result, (0,))
+    if status is not None:
+        return _unobserved(
+            "PyScn execution did not complete valid analysis", status, len(files)
+        )
+    try:
+        data = object_value(json_value(result.stdout))
+        analyzed, partial = coverage(ctx, files, data)
+    except (ValueError, TypeError):
+        return _unobserved(
+            "PyScn output failed snapshot schema or coverage validation",
+            "failed",
+            len(files),
+        )
+    return _component_stages(
+        ctx, files, data, analyzed, partial, result.duration_seconds
+    )

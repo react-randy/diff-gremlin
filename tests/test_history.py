@@ -5,7 +5,8 @@ import subprocess
 import pytest
 from test_python_analyzers import FakeRunner, make_context, native_runner
 
-from diff_gremlin.analyzers.history import _source_observations, analyze_history
+from diff_gremlin.analyzers.history import analyze_history
+from diff_gremlin.analyzers.history_measure import source_observations
 from diff_gremlin.domain.process import RunResult
 
 _SHA = "a" * 40
@@ -123,7 +124,7 @@ def test_named_function_ast_measure_does_not_double_count_nested_functions():
         return 3
     return inner(x)
 """
-    assert _source_observations(source) == [2, 2]
+    assert source_observations(source) == [2, 2]
 
 
 def test_ast_measure_defined_decision_controls():
@@ -135,7 +136,7 @@ def test_ast_measure_defined_decision_controls():
     except ValueError:
         return 3
 """
-    assert _source_observations(source) == [7]
+    assert source_observations(source) == [7]
 
 
 def git(repo, *args):
