@@ -1,22 +1,30 @@
 """Reject stale releases, ambiguous registry failures and substituted image receipts."""
 
-import argparse
 import base64
+import importlib
 import importlib.util
-import io
 import json
+import subprocess
+import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
 
 import pytest
 
+ROOT = Path(__file__).parents[1]
 SPEC = importlib.util.spec_from_file_location(
-    "image_publication", Path(__file__).parents[1] / "scripts/image_publication.py"
+    "image_publication_support", ROOT / "scripts/image_publication_support/__init__.py"
 )
 assert SPEC and SPEC.loader
-publication = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(publication)
+support = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = support
+SPEC.loader.exec_module(support)
+identity = importlib.import_module("image_publication_support.identity")
+registry = importlib.import_module("image_publication_support.registry")
+receipts = importlib.import_module("image_publication_support.receipts")
+transport = importlib.import_module("image_publication_support.transport")
+policy = importlib.import_module("image_publication_support.policy")
 SOURCE = "a" * 40
 DIGESTS = {"amd64": "sha256:" + "1" * 64, "arm64": "sha256:" + "2" * 64}
 
@@ -24,8 +32,8 @@ DIGESTS = {"amd64": "sha256:" + "1" * 64, "arm64": "sha256:" + "2" * 64}
 @pytest.fixture
 def context():
     return {
-        "GITHUB_REPOSITORY": publication.REPOSITORY,
-        "GITHUB_REPOSITORY_ID": str(publication.REPOSITORY_ID),
+        "GITHUB_REPOSITORY": policy.REPOSITORY,
+        "GITHUB_REPOSITORY_ID": str(policy.REPOSITORY_ID),
         "GITHUB_EVENT_NAME": "workflow_dispatch",
         "GITHUB_REF": "refs/heads/main",
         "GITHUB_SHA": SOURCE,
@@ -54,15 +62,15 @@ def release():
 )
 def test_publication_rejects_repository_substitution(context, field, value):
     repository = {
-        "full_name": publication.REPOSITORY,
-        "id": publication.REPOSITORY_ID,
+        "full_name": policy.REPOSITORY,
+        "id": policy.REPOSITORY_ID,
         "private": False,
         "default_branch": "main",
     }
-    publication.validate_repository(context, repository)
+    identity.validate_repository(context, repository)
     repository[field] = value
     with pytest.raises(ValueError):
-        publication.validate_repository(context, repository)
+        identity.validate_repository(context, repository)
 
 
 @pytest.mark.parametrize(
@@ -75,7 +83,7 @@ def test_publication_rejects_repository_substitution(context, field, value):
 def test_fork_cannot_publish(context, field, value):
     context[field] = value
     with pytest.raises(ValueError):
-        publication.validate_repository(context, {})
+        identity.validate_repository(context, {})
 
 
 @pytest.mark.parametrize(
@@ -89,42 +97,42 @@ def test_fork_cannot_publish(context, field, value):
     ],
 )
 def test_unpublished_or_different_release_cannot_publish(release, field, value):
-    publication.validate_release(release)
+    identity.validate_release(release)
     release[field] = value
     with pytest.raises(ValueError):
-        publication.validate_release(release)
+        identity.validate_release(release)
 
 
 def test_dispatch_requires_main_and_fixed_tag(context, release):
     event = {"inputs": {"tag": "v1.0.0"}}
-    publication.validate_event(context, event, release)
+    identity.validate_event(context, event, release)
     context["GITHUB_REF"] = "refs/heads/unreviewed"
     with pytest.raises(ValueError, match="from main"):
-        publication.validate_event(context, event, release)
+        identity.validate_event(context, event, release)
     context["GITHUB_REF"] = "refs/heads/main"
     event["inputs"]["tag"] = "v1.0.0; touch should-not-run"
     with pytest.raises(ValueError, match=r"name v1\.0\.0"):
-        publication.validate_event(context, event, release)
+        identity.validate_event(context, event, release)
 
 
 def test_release_event_requires_current_published_identity(context, release):
     context.update(GITHUB_EVENT_NAME="release", GITHUB_REF="refs/tags/v1.0.0")
     event = {"action": "published", "release": dict(release)}
-    publication.validate_event(context, event, release)
+    identity.validate_event(context, event, release)
     event["release"]["id"] += 1
     with pytest.raises(ValueError, match="identity has changed"):
-        publication.validate_event(context, event, release)
+        identity.validate_event(context, event, release)
     event["release"]["id"] = release["id"]
     event["action"] = "edited"
     with pytest.raises(ValueError, match="must be published"):
-        publication.validate_event(context, event, release)
+        identity.validate_event(context, event, release)
 
 
 @pytest.mark.parametrize("event_name", ["pull_request", "push", "pull_request_target"])
 def test_untrusted_event_cannot_publish(context, release, event_name):
     context["GITHUB_EVENT_NAME"] = event_name
     with pytest.raises(ValueError, match="Unsupported"):
-        publication.validate_event(context, {}, release)
+        identity.validate_event(context, {}, release)
 
 
 @pytest.mark.parametrize(
@@ -139,16 +147,16 @@ def test_untrusted_event_cannot_publish(context, release, event_name):
 def test_moving_or_nonimmutable_source_cannot_publish(context, tag, main, checkout, expected):
     context["GITHUB_SHA"] = checkout
     with pytest.raises(ValueError):
-        publication.validate_source(context, tag, main, expected)
+        identity.validate_source(context, tag, main, expected)
 
 
 def test_matching_full_source_identity_is_accepted(context):
-    assert publication.validate_source(context, SOURCE, SOURCE, SOURCE) == SOURCE
+    assert identity.validate_source(context, SOURCE, SOURCE, SOURCE) == SOURCE
 
 
 @pytest.mark.parametrize("code", ["MANIFEST_UNKNOWN", "NAME_UNKNOWN"])
 def test_explicit_authenticated_missing_manifest_is_accepted(code):
-    publication.validate_absence(404, {"errors": [{"code": code}]})
+    registry.validate_absence(404, {"errors": [{"code": code}]})
 
 
 @pytest.mark.parametrize(
@@ -167,14 +175,14 @@ def test_explicit_authenticated_missing_manifest_is_accepted(code):
 )
 def test_existing_tag_auth_failure_or_outage_never_proves_absence(status, body):
     with pytest.raises(ValueError):
-        publication.validate_absence(status, body)
+        registry.validate_absence(status, body)
 
 
 def create_receipts(tmp_path):
     for architecture, digest in DIGESTS.items():
         path = tmp_path / architecture / "receipt.json"
         path.parent.mkdir()
-        data = publication.receipt_identity(architecture, SOURCE, "42", "1")
+        data = receipts.receipt_identity(architecture, SOURCE, "42", "1")
         data["digest"] = digest
         path.write_text(json.dumps(data))
     return tmp_path
@@ -200,62 +208,50 @@ def test_final_index_rejects_substituted_receipt(tmp_path, field, value):
     receipt[field] = value
     path.write_text(json.dumps(receipt))
     with pytest.raises(ValueError):
-        publication.read_receipts(tmp_path, SOURCE, "42", "1")
+        receipts.read_receipts(tmp_path, SOURCE, "42", "1")
 
 
 def test_final_index_requires_both_native_proofs(tmp_path):
     create_receipts(tmp_path)
-    assert publication.read_receipts(tmp_path, SOURCE, "42", "1") == DIGESTS
+    assert receipts.read_receipts(tmp_path, SOURCE, "42", "1") == DIGESTS
     (tmp_path / "arm64/receipt.json").unlink()
     with pytest.raises(ValueError, match="exactly two"):
-        publication.read_receipts(tmp_path, SOURCE, "42", "1")
+        receipts.read_receipts(tmp_path, SOURCE, "42", "1")
 
 
 @pytest.mark.parametrize(
     "references,platform",
     [
         ([], "linux/amd64"),
-        ([f"{publication.IMAGE}@{DIGESTS['amd64']}"] * 2, "linux/amd64"),
+        ([f"{policy.IMAGE}@{DIGESTS['amd64']}"] * 2, "linux/amd64"),
         (["ghcr.io/other/image@" + DIGESTS["amd64"]], "linux/amd64"),
-        ([f"{publication.IMAGE}@sha256:short"], "linux/amd64"),
-        ([f"{publication.IMAGE}@{DIGESTS['amd64']}"], "linux/arm64"),
+        ([f"{policy.IMAGE}@sha256:short"], "linux/amd64"),
+        ([f"{policy.IMAGE}@{DIGESTS['amd64']}"], "linux/arm64"),
     ],
 )
-def test_pushed_receipt_requires_correct_platform_and_unambiguous_digest(
-    tmp_path, monkeypatch, references, platform
-):
-    args = argparse.Namespace(
-        architecture="amd64",
-        sha=SOURCE,
-        run_id="42",
-        attempt="1",
-        platform=platform,
-        output=tmp_path / "receipt.json",
-    )
-    monkeypatch.setattr(publication.sys, "stdin", io.StringIO(json.dumps(references)))
+def test_pushed_receipt_requires_correct_platform_and_unambiguous_digest(references, platform):
     with pytest.raises(ValueError):
-        publication.write_receipt(args)
-    assert not args.output.exists()
+        receipts.pushed_receipt("amd64", SOURCE, "42", "1", platform, references)
 
 
 def test_published_index_must_match_exact_native_digests():
     manifest = {
-        "mediaType": publication.MANIFEST_TYPES[0],
+        "mediaType": policy.MANIFEST_TYPES[0],
         "manifests": [
             {"digest": value, "platform": {"os": "linux", "architecture": architecture}}
             for architecture, value in DIGESTS.items()
         ],
     }
-    publication.validate_index(manifest, DIGESTS)
+    receipts.validate_index(manifest, DIGESTS)
     manifest["manifests"][0]["digest"] = "sha256:" + "3" * 64
     with pytest.raises(ValueError, match="does not match"):
-        publication.validate_index(manifest, DIGESTS)
+        receipts.validate_index(manifest, DIGESTS)
 
 
 @pytest.mark.parametrize("architecture", ["386", "$(touch sentinel)", "amd64\nversion=latest"])
 def test_receipt_rejects_unowned_architecture(architecture):
     with pytest.raises(ValueError):
-        publication.receipt_identity(architecture, SOURCE, "42", "1")
+        receipts.receipt_identity(architecture, SOURCE, "42", "1")
 
 
 def test_registry_credentials_stay_in_headers(tmp_path, monkeypatch, capsys):
@@ -275,8 +271,8 @@ def test_registry_credentials_stay_in_headers(tmp_path, monkeypatch, capsys):
             return 200, {"token": "FAKE_SCOPED_SECRET"}
         return 404, {"errors": [{"code": "MANIFEST_UNKNOWN"}]}
 
-    monkeypatch.setattr(publication, "http_json", http_json)
-    publication.require_absent(tmp_path)
+    monkeypatch.setattr(transport, "http_json", http_json)
+    registry.require_absent(tmp_path)
     output = capsys.readouterr()
     assert "FAKE" not in output.out + output.err
     assert all("FAKE" not in url for url, _ in calls)
@@ -296,8 +292,8 @@ def test_guard_resolves_live_identity_and_writes_only_fixed_outputs(
     monkeypatch.setenv("GITHUB_OUTPUT", str(output_path))
     metadata = {
         "": {
-            "full_name": publication.REPOSITORY,
-            "id": publication.REPOSITORY_ID,
+            "full_name": policy.REPOSITORY,
+            "id": policy.REPOSITORY_ID,
             "private": False,
             "default_branch": "main",
         },
@@ -305,23 +301,112 @@ def test_guard_resolves_live_identity_and_writes_only_fixed_outputs(
         "commits/v1.0.0": {"sha": SOURCE},
         "commits/main": {"sha": SOURCE},
     }
-    monkeypatch.setattr(publication, "github_metadata", metadata.__getitem__)
-    publication.guard(SOURCE)
+    monkeypatch.setattr(identity, "github_metadata", metadata.__getitem__)
+    identity.guard(SOURCE)
     assert output_path.read_text() == f"sha={SOURCE}\nversion=1.0.0\nrelease_id=123\n"
     with pytest.raises(ValueError, match="identity changed during run"):
-        publication.guard(SOURCE, "124")
+        identity.guard(SOURCE, "124")
 
 
 @pytest.mark.parametrize("destination", ["https://other.example/token", "http://ghcr.io/token"])
 def test_registry_credentials_cannot_follow_foreign_or_http_redirects(destination):
     request = urllib.request.Request("https://ghcr.io/token", headers={"Authorization": "fake"})
     with pytest.raises(urllib.error.URLError, match="outside its origin"):
-        publication.PublicationRedirects().redirect_request(request, None, 302, "", {}, destination)
+        transport.PublicationRedirects().redirect_request(request, None, 302, "", {}, destination)
 
 
 def test_malformed_registry_credentials_fail_without_disclosure(tmp_path):
     secret = "FAKE_LOGIN_SECRET\ninvalid"
     (tmp_path / "config.json").write_text(json.dumps({"auths": {"ghcr.io": {"auth": secret}}}))
     with pytest.raises(ValueError) as error:
-        publication.registry_token(tmp_path)
+        registry.registry_token(tmp_path)
     assert "FAKE" not in str(error.value)
+
+
+def invoke_publication(arguments, directory, data=None):
+    return subprocess.run(
+        [sys.executable, str(ROOT / "scripts/image_publication.py"), *arguments],
+        cwd=directory,
+        input=json.dumps(data) if data is not None else None,
+        text=True,
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+
+
+def test_thin_entry_preserves_cli_from_another_working_directory(tmp_path):
+    result = invoke_publication(["--help"], tmp_path)
+    assert result.returncode == 0
+    assert (
+        "Check the fixed Diff Gremlin release and its container publication receipts."
+        in result.stdout
+    )
+    assert "{guard,absent,receipt,sources,index}" in result.stdout
+
+
+def test_public_cli_receipt_sources_and_index_cross_module_boundaries(tmp_path):
+    common = ["--sha", SOURCE, "--run-id", "42", "--attempt", "1"]
+    directory = tmp_path / "receipts"
+    for architecture, value in DIGESTS.items():
+        output = directory / architecture / "receipt.json"
+        result = invoke_publication(
+            [
+                "receipt",
+                *common,
+                "--architecture",
+                architecture,
+                "--platform",
+                f"linux/{architecture}",
+                "--output",
+                str(output),
+            ],
+            tmp_path,
+            [f"{policy.IMAGE}@{value}"],
+        )
+        assert result.returncode == 0, result.stderr
+        assert json.loads(output.read_text())["digest"] == value
+    result = invoke_publication(["sources", *common, "--receipts", str(directory)], tmp_path)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.splitlines() == [f"{policy.IMAGE}@{value}" for value in DIGESTS.values()]
+    manifest = {
+        "mediaType": policy.MANIFEST_TYPES[0],
+        "manifests": [
+            {"digest": value, "platform": {"os": "linux", "architecture": architecture}}
+            for architecture, value in DIGESTS.items()
+        ],
+    }
+    result = invoke_publication(
+        ["index", *common, "--receipts", str(directory)],
+        tmp_path,
+        manifest,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == "Published index matches both validated native image receipts"
+
+
+def test_public_cli_does_not_write_invalid_platform_receipt(tmp_path):
+    output = tmp_path / "receipt.json"
+    result = invoke_publication(
+        [
+            "receipt",
+            "--sha",
+            SOURCE,
+            "--run-id",
+            "42",
+            "--attempt",
+            "1",
+            "--architecture",
+            "amd64",
+            "--platform",
+            "linux/arm64",
+            "--output",
+            str(output),
+        ],
+        tmp_path,
+        [f"{policy.IMAGE}@{DIGESTS['amd64']}"],
+    )
+    assert result.returncode == 1
+    assert "Image publication gate failed: Built image platform mismatch" in result.stderr
+    assert result.stdout == ""
+    assert not output.exists()
