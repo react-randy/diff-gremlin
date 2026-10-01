@@ -1,13 +1,12 @@
 """Probe trusted tool availability without executing a target repository."""
 
 import shutil
-from pathlib import Path
 
 
 def document() -> dict:
     from diff_gremlin.process import trusted_path
 
-    search = trusted_path(Path.cwd())
+    search = trusted_path()
     tools = (
         "git",
         "ruff",

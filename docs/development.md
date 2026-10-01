@@ -22,7 +22,8 @@ For reviewed cross-language analyzer dependencies:
 ```sh
 npm --prefix toolchain/node ci --ignore-scripts --no-audit --no-fund
 uv run python scripts/provision_gitleaks.py .venv/bin
-export DIFF_GREMLIN_TOOL_PATH="$PWD/toolchain/node/node_modules/.bin:$JAVA_HOME/bin"
+uv run python scripts/provision_shfmt.py .venv/bin
+export DIFF_GREMLIN_TOOL_PATH="$PWD/toolchain/node/node_modules/.bin:$(dirname "$(command -v node)"):$JAVA_HOME/bin"
 uv run diff-gremlin doctor
 ```
 
@@ -55,7 +56,7 @@ python3 scripts/verify_docker.py diff-gremlin:ci
 ```
 
 The Docker check exercises help, all discovered tool executables, and actual
-Python/TypeScript/Java/secrets adapters against a trusted mixed-language control
+Python/TypeScript/Java/Shell/secrets adapters against a trusted mixed-language control
 with a space in its mount path. It requires read-only mounts and verifies unchanged
 source bytes. It never runs the control's npm/Gradle wrapper. The GitHub workflow
 runs native amd64 and arm64 Docker jobs; a checked-in workflow is not itself a
@@ -89,11 +90,19 @@ and platform claims match the evidence. The release has these assets:
 - `install.sh`
 - `core-requirements.txt`, `full-requirements.txt`
 - `provision_gitleaks.py`
+- `provision_shfmt.py`, `download_asset.py`
 - `SHA256SUMS`
 
 Publish the separately validated full image as
 `ghcr.io/react-randy/diff-gremlin:1.0.0`, retaining its immutable digest in the release
 record. Preserve both Linux architectures only after their native tests pass.
+The publication workflow runs release helpers as modules from the trusted checkout
+root (`python3 -m scripts.image_publication`). It requires the published stable
+release tag, checkout and current main to name the same commit. Both native runtime
+controls and digest receipts must pass before the version index is created. The
+package owner then makes the GHCR package public and verifies anonymous pulls.
+Workflow concurrency serializes this repository's publishers; the registry does
+not provide an atomic create-if-absent operation against unrelated publishers.
 Then test the public curl command in disposable `UV_TOOL_DIR`/`UV_TOOL_BIN_DIR`
 directories and verify uninstall. Update release-readiness prose before the final
 wheel build; editing README afterward changes package metadata and invalidates the

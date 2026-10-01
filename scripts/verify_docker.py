@@ -82,12 +82,17 @@ def checked_stages(data: dict) -> dict:
     """Require valid evidence and pinned versions from every bundled adapter."""
     stages = {stage["id"]: stage for stage in data["stages"]}
     expected = (
+        "inventory",
+        "hygiene",
+        "security.unicode",
+        "security.execution",
         "complexity.javascript",
         "shell.syntax.shfmt",
         "complexity.shell",
         "python.lint.ruff",
         "python.types.pyrefly",
         "python.health.pyscn",
+        "python.deadcode.pyscn",
         "python.duplication.pyscn",
         "python.maintainability.radon",
         "javascript.lint.eslint",
@@ -107,6 +112,8 @@ def checked_stages(data: dict) -> dict:
         raise ValueError(
             f"Docker control has invalid bundled analyzer evidence: {failures}"
         )
+    if data.get("assessment", {}).get("complete") is not True:
+        raise ValueError("Docker positive control requires complete selected evidence")
     pinned_versions = {
         "python.lint.ruff": "0.16.8",
         "python.types.pyrefly": "1.3.0",
@@ -146,7 +153,7 @@ def check_control(image: str) -> None:
             ["check", "/workspace", "--format", "json", "--profile", "full"],
             root,
         )
-        if result.returncode not in (0, 1, 3):
+        if result.returncode != 0:
             raise ValueError(
                 f"Docker control failed ({result.returncode}): {result.stderr}"
             )
