@@ -246,13 +246,10 @@ def inventory_stage(state: InventoryState) -> StageResult:
     )
 
 
-def collect_inventory(
-    root: Path, scope_manifest: tuple[SourceScopeEntry, ...] = ()
-) -> Inventory:
-    """Count regular in-scope files without traversing a symbolic link."""
-    root = Path(root)
-    if root.is_symlink() or not root.is_dir():
-        raise ValueError("Inventory root must be a regular directory")
+def _inventory_state(
+    root: Path, scope_manifest: tuple[SourceScopeEntry, ...]
+) -> InventoryState:
+    """Merge captured omissions into the initial inventory coverage state."""
     state = InventoryState(
         root,
         scope_manifest=list(scope_manifest),
@@ -261,9 +258,11 @@ def collect_inventory(
     for row in scope_manifest:
         if row.classification != "binary-asset":
             state.issue(Path(row.relative_path), row.reason)
-    pending = [root]
-    while pending and not state.capped:
-        inventory_directory(state, pending.pop(), pending)
+    return state
+
+
+def _inventory_result(state: InventoryState) -> Inventory:
+    """Freeze collected state into deterministic analyzer inputs and coverage."""
     state.files.sort(key=lambda source: source.relative_path)
     return Inventory(
         tuple(state.files),
@@ -272,3 +271,17 @@ def collect_inventory(
         inventory_stage(state),
         tuple(sorted(state.scope_manifest, key=lambda row: row.relative_path)),
     )
+
+
+def collect_inventory(
+    root: Path, scope_manifest: tuple[SourceScopeEntry, ...] = ()
+) -> Inventory:
+    """Count regular in-scope files without traversing a symbolic link."""
+    root = Path(root)
+    if root.is_symlink() or not root.is_dir():
+        raise ValueError("Inventory root must be a regular directory")
+    state = _inventory_state(root, scope_manifest)
+    pending = [root]
+    while pending and not state.capped:
+        inventory_directory(state, pending.pop(), pending)
+    return _inventory_result(state)
