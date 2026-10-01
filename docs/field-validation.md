@@ -144,10 +144,13 @@ Recipe Lab never reached these stages. The corrected Algorithms receipt contains
 
 ## Reproduce
 
-Use the complete Docker toolchain from a supported Linux amd64/arm64 host:
+Use the complete Docker toolchain from a supported Linux amd64/arm64 host.
+These recorded samples used checker 1.0.0; the reproduction command uses patch
+1.0.1, which fixes image publication URLs without changing analyzer logic, versions
+or score policy:
 
 ```sh
-docker run --rm ghcr.io/react-randy/diff-gremlin:1.0.0 check \
+docker run --rm ghcr.io/react-randy/diff-gremlin:1.0.1 check \
   https://github.com/DevilXD/TwitchDropsMiner \
   --ref 22d0c6134f9291d1e904012c465504a22bd3f97c --profile full --format json
 ```

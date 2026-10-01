@@ -44,7 +44,7 @@ jobs:
       - name: Build package with verified backend
         run: uv build --wheel --require-hashes --build-constraints toolchain/python/build-requirements.txt
       - name: Verify shipped assets and stage release preview
-        run: python3 scripts/prepare_release.py dist/diff_gremlin-1.0.0-py3-none-any.whl --out "$RUNNER_TEMP/release"
+        run: python3 scripts/prepare_release.py dist/diff_gremlin-1.0.1-py3-none-any.whl --out "$RUNNER_TEMP/release"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: diff-gremlin-release-preview

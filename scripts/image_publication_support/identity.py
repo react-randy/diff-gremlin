@@ -11,7 +11,7 @@ from .policy import REPOSITORY, REPOSITORY_ID, TAG, VERSION, require, sha
 def github_metadata(endpoint: str) -> dict:
     """Read this public repository's live metadata without a secret."""
     status, result = transport.http_json(
-        f"https://api.github.com/repos/{REPOSITORY}/{endpoint}",
+        f"https://api.github.com/repos/{REPOSITORY}/{endpoint}".rstrip("/"),
         {
             "Accept": "application/vnd.github+json",
             "User-Agent": "diff-gremlin-publication",
@@ -56,7 +56,7 @@ def validate_event(context: dict, event: dict, release: dict) -> None:
         require(
             context["GITHUB_REF"] == "refs/heads/main", "Dispatch must run from main"
         )
-        require(event.get("inputs", {}).get("tag") == TAG, "Dispatch must name v1.0.0")
+        require(event.get("inputs", {}).get("tag") == TAG, "Dispatch must name v1.0.1")
         return
     require(event_name == "release", "Unsupported publication event")
     require(event.get("action") == "published", "Release event must be published")
