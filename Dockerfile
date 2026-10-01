@@ -10,7 +10,7 @@ FROM ghcr.io/astral-sh/uv:0.12.18@sha256:3adc3706091ce7c2fe595e669628caedd6d9515
 FROM python:3.12.12-slim-bookworm@sha256:593bd06efe90efa80dc4eee3948be7c0fde4134606dd40d8dd8dbcade98e669c AS system
 COPY toolchain/debian.sources /etc/apt/sources.list.d/debian.sources
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates git libstdc++6 zlib1g \
+    && apt-get install -y --no-install-recommends ca-certificates git libstdc++6 zlib1g passwd \
     && rm -rf /var/lib/apt/lists/*
 
 FROM system AS package

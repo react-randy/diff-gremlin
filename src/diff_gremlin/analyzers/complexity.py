@@ -53,6 +53,11 @@ def _complexity_metrics(functions: list[dict], is_limited: bool) -> tuple[dict, 
             max_cc=max(values, default=0),
             average_cc=sum(values) / len(values) if values else 0.0,
         )
+    declarations = [
+        row for row in functions if row.get("origin") == "python-ast-ellipsis-declaration"
+    ]
+    if declarations:
+        metrics["declarations"] = declarations
     return metrics, hotspots
 
 
@@ -126,6 +131,8 @@ def analyze_complexity(ctx: ScanContext) -> StageResult:
         findings=_hotspot_findings(hotspots),
         reason="Lizard may omit valid Scala function declarations; function coverage is incomplete"
         if is_limited
+        else "Python ellipsis declarations omitted by Lizard are accounted for with AST, named locations and branch-free complexity 1"
+        if metrics.get("declarations")
         else "",
         analyzed_files=len(files),
         eligible_files=len(files),

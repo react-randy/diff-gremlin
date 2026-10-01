@@ -1,9 +1,9 @@
 """Validate Lizard XML observations against the exact production inventory."""
 
-import ast
 import xml.etree.ElementTree as ET
 
 from diff_gremlin.analyzers.locations import relative_location
+from diff_gremlin.analyzers.python.declarations import missing_declarations
 from diff_gremlin.domain.context import ScanContext, SourceFile
 
 
@@ -27,15 +27,13 @@ def _verify_function_counts(seen: dict[str, int], functions: list[dict]) -> None
             raise ValueError("Lizard file count disagrees with function observations")
 
 
-def _verify_python_declarations(files: tuple[SourceFile, ...], seen: dict[str, int]) -> None:
-    for file in files:
-        if file.path.suffix.lower() == ".py":
-            tree = ast.parse(file.path.read_text(encoding="utf-8"))
-            expected = sum(
-                isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) for node in ast.walk(tree)
-            )
-            if expected != seen[file.relative_path]:
-                raise ValueError("Lizard missed Python function declarations")
+def _python_declarations(files: tuple[SourceFile, ...], functions: list[dict]) -> list[dict]:
+    return [
+        declaration
+        for file in files
+        if file.path.suffix.lower() == ".py"
+        for declaration in missing_declarations(file, functions)
+    ]
 
 
 def _values(item: ET.Element, length: int) -> list[int]:
@@ -85,5 +83,4 @@ def observations(ctx: ScanContext, files: tuple[SourceFile, ...], text: str) -> 
     seen = _file_counts(ctx, files, file_measure)
     functions = _functions(ctx, files, function_measure)
     _verify_function_counts(seen, functions)
-    _verify_python_declarations(files, seen)
-    return functions
+    return functions + _python_declarations(files, functions)

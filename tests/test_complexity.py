@@ -143,3 +143,36 @@ def test_native_scala_parser_gap_is_visible(tmp_path):
 def test_python_declaration_cannot_be_hidden_as_known_zero(tmp_path):
     stage = analyze_complexity(make_context(tmp_path, FakeRunner(xml())))
     assert stage.status == "failed" and not stage.metrics
+
+
+@pytest.mark.parametrize("body", ["...", '"""Interface only."""; ...'])
+def test_native_protocol_declarations_are_accounted_for_without_hiding_real_bodies(tmp_path, body):
+    source = (
+        "from typing import Protocol\n"
+        f"class Example(Protocol):\n    def call(self) -> int: {body}\n"
+        "def choose(value):\n    if value:\n        return 1\n    return 0\n"
+    )
+    stage = analyze_complexity(make_context(tmp_path, native_runner, {"a.py": source}))
+    assert stage.status == "ok", stage.reason
+    assert stage.metrics["functions"] == 2
+    assert stage.metrics["max_cc"] == 2
+    assert stage.metrics["average_cc"] == 1.5
+    declarations = stage.metrics.get("declarations", [])
+    if declarations:
+        assert declarations == [
+            {
+                "file": "a.py",
+                "function": "Example.call",
+                "line": 3,
+                "cc": 1,
+                "origin": "python-ast-ellipsis-declaration",
+            }
+        ]
+
+
+def test_stub_does_not_explain_missing_executable_function_evidence(tmp_path):
+    source = (
+        "def interface(): ...\ndef choose(value):\n    if value:\n        return 1\n    return 0\n"
+    )
+    stage = analyze_complexity(make_context(tmp_path, FakeRunner(xml()), {"a.py": source}))
+    assert stage.status == "failed" and stage.metrics == {}
