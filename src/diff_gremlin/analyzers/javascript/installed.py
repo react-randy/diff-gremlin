@@ -4,9 +4,8 @@ import json
 import shutil
 from pathlib import Path
 
-from diff_gremlin.process import trusted_path
-
 from diff_gremlin.domain.context import ScanContext
+from diff_gremlin.process import trusted_path
 
 
 def trusted_executable(ctx: ScanContext, name: str) -> str | None:
@@ -50,7 +49,5 @@ def sibling_package(package: Path, name: str) -> Path | None:
     for parent in package.parents:
         if parent.name == "node_modules":
             candidate = parent / name
-            return (
-                candidate.resolve() if (candidate / "package.json").is_file() else None
-            )
+            return candidate.resolve() if (candidate / "package.json").is_file() else None
     return None

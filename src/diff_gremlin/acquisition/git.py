@@ -110,9 +110,7 @@ def remote_url(target: str) -> str | None:
             "Remote acquisition requires an HTTP(S) repository URL; use a local checkout for SSH repositories"
         )
     if parsed.username or parsed.password or parsed.query or parsed.fragment:
-        raise ValueError(
-            "Repository URLs must not contain credentials or URL parameters"
-        )
+        raise ValueError("Repository URLs must not contain credentials or URL parameters")
     try:
         _port = parsed.port
     except ValueError as exc:

@@ -10,6 +10,7 @@ from diff_gremlin.analyzers.history_objects import (
     python_entries,
 )
 from diff_gremlin.domain.context import ScanContext
+from diff_gremlin.domain.process import RunResult
 
 
 def commit_identities(text: str) -> list[tuple[str, int]]:
@@ -20,6 +21,19 @@ def commit_identities(text: str) -> list[tuple[str, int]]:
             raise ValueError("invalid commit history metadata")
         identities.append((sha, int(timestamp)))
     return identities
+
+
+def checked_output(result: RunResult, allow_missing: bool) -> str:
+    """Validate Git transport evidence before consuming source metadata."""
+    if allow_missing and result.status == "ok" and result.returncode == 1 and not result.stdout:
+        return ""
+    if result.status == "ok" and result.returncode == 0:
+        return result.stdout
+    if result.status == "missing":
+        raise FileNotFoundError("Git is not installed")
+    if result.status == "timeout":
+        raise TimeoutError("Git history operation timed out")
+    raise ValueError("Git history operation failed")
 
 
 class HistoryReader:
@@ -52,15 +66,7 @@ class HistoryReader:
             input_text=input_text,
             data_output=bool(args and args[0] == "cat-file"),
         )
-        if allow_missing and result.status == "ok" and result.returncode == 1 and not result.stdout:
-            return ""
-        if result.status != "ok" or result.returncode != 0:
-            if result.status == "missing":
-                raise FileNotFoundError("Git is not installed")
-            if result.status == "timeout":
-                raise TimeoutError("Git history operation timed out")
-            raise ValueError("Git history operation failed")
-        return result.stdout
+        return checked_output(result, allow_missing)
 
     def is_repository(self) -> bool:
         inside = self.git("rev-parse", "--is-inside-work-tree").strip()

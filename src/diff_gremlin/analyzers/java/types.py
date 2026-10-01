@@ -2,27 +2,23 @@
 
 import re
 import tempfile
+from functools import partial
 from pathlib import Path
-
-from diff_gremlin.analyzers.status import unavailable
-from diff_gremlin.analyzers.versions import tool_version
 
 from diff_gremlin.analyzers.javascript.installed import trusted_executable
 from diff_gremlin.analyzers.javascript.output import failure_status, valid_run
+from diff_gremlin.analyzers.status import unavailable
+from diff_gremlin.analyzers.versions import tool_version
 from diff_gremlin.domain.context import ScanContext
 from diff_gremlin.domain.findings import Finding
 from diff_gremlin.domain.stages import StageResult
 
 _ID, _LABEL = "java.types", "Java standalone static types"
-_DIAGNOSTIC = re.compile(
-    r"^(.+\.java):(\d+):(\d+): (compiler\.(?:err|warn)\.[a-z0-9.]+)"
-)
+_DIAGNOSTIC = re.compile(r"^(.+\.java):(\d+):(\d+): (compiler\.(?:err|warn)\.[a-z0-9.]+)")
 
 
 def _invoke(ctx, compiler, files):
-    with tempfile.TemporaryDirectory(
-        prefix="java-types-", dir=ctx.scratch
-    ) as directory:
+    with tempfile.TemporaryDirectory(prefix="java-types-", dir=ctx.scratch) as directory:
         workspace = Path(directory)
         empty = workspace / "empty"
         empty.mkdir()
@@ -86,8 +82,7 @@ def _counts(findings):
     errors = sum(f.severity == "medium" for f in findings)
     warnings = sum(f.severity == "low" for f in findings)
     dependencies = sum(
-        f.rule in {"compiler.err.doesnt.exist", "compiler.err.cant.access"}
-        for f in findings
+        f.rule in {"compiler.err.doesnt.exist", "compiler.err.cant.access"} for f in findings
     )
     return errors, warnings, dependencies
 
@@ -95,8 +90,7 @@ def _counts(findings):
 def _diagnostics(result, files):
     paths, names = _source_paths(files)
     observations = (
-        _diagnostic(line, paths, names)
-        for line in (result.stdout + result.stderr).splitlines()
+        _diagnostic(line, paths, names) for line in (result.stdout + result.stderr).splitlines()
     )
     findings = [finding for finding in observations if finding is not None]
     errors, warnings, dependency_count = _counts(findings)
@@ -108,19 +102,10 @@ def _diagnostics(result, files):
 def analyze_java_types(ctx: ScanContext) -> StageResult:
     files = tuple(file for file in ctx.production_files if file.language == "java")
 
-    def absent(reason, status="missing"):
-        return unavailable(
-            _ID,
-            _LABEL,
-            "types",
-            "javac",
-            reason,
-            status=status,
-            eligible_files=len(files),
-        )
+    absent = partial(unavailable, _ID, _LABEL, "types", "javac", eligible_files=len(files))
 
     if not files:
-        return absent("No Java production files", "skipped")
+        return absent("No Java production files", status="skipped")
     compiler = trusted_executable(ctx, "javac")
     if not compiler:
         return absent("Installed trusted javac unavailable; target builds are excluded")
@@ -128,14 +113,14 @@ def analyze_java_types(ctx: ScanContext) -> StageResult:
     if not valid_run(result, (0, 1)):
         return absent(
             f"Standalone javac invocation {result.status}; exit {result.returncode}",
-            failure_status(result),
+            status=failure_status(result),
         )
     try:
         findings, errors, warnings, dependency_count = _diagnostics(result, files)
     except ValueError:
         return absent(
             "javac exit/diagnostic evidence inconsistent, unrecognized or outside selected source",
-            "failed",
+            status="failed",
         )
     limited = dependency_count > 0
     return StageResult(

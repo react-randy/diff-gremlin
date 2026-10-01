@@ -15,7 +15,7 @@ def identity(finding: Finding) -> str:
     if finding.fingerprint:
         return finding.fingerprint
     text = f"{finding.rule}\0{finding.path}\0{finding.symbol}\0{finding.message}"
-    return hashlib.sha256(text.encode()).hexdigest()[:20]
+    return hashlib.sha256(text.encode("utf-8", "surrogateescape")).hexdigest()[:20]
 
 
 def unmatched(findings: list[Finding], other: list[Finding]) -> list[dict]:

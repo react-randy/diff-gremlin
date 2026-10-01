@@ -1,8 +1,7 @@
 """Measure every JS/TS function code path using native ESLint complexity."""
 
+from functools import partial
 from pathlib import Path
-
-from diff_gremlin.analyzers.status import unavailable
 
 from diff_gremlin.analyzers.javascript.installed import (
     installed_package,
@@ -17,6 +16,7 @@ from diff_gremlin.analyzers.javascript.output import (
     positive,
     valid_run,
 )
+from diff_gremlin.analyzers.status import unavailable
 from diff_gremlin.domain.context import ScanContext
 from diff_gremlin.domain.findings import Finding
 from diff_gremlin.domain.stages import StageResult
@@ -28,7 +28,9 @@ def _environment(ctx):
     package = installed_package(ctx, "eslint", "eslint")
     node = trusted_executable(ctx, "node")
     parser = sibling_package(package, "@typescript-eslint/parser") if package else None
-    return (node, package, parser) if all((node, package, parser)) else None
+    if node is None or package is None or parser is None:
+        return None
+    return node, package, parser
 
 
 def _function(row, paths):
@@ -63,9 +65,7 @@ def _observations(stdout, files):
     functions = [_function(row, paths) for row in data["functions"]]
     if len(functions) != data["expected_count"]:
         raise ValueError("native complexity omitted a code path")
-    locations = {
-        (row["file"], row["line"], row["column"], row["kind"]) for row in functions
-    }
+    locations = {(row["file"], row["line"], row["column"], row["kind"]) for row in functions}
     if len(locations) != len(functions):
         raise ValueError("duplicate complexity identity")
     return functions, data["parse_errors"]
@@ -103,24 +103,13 @@ def _findings(hotspots):
 
 def analyze_js_complexity(ctx: ScanContext) -> StageResult:
     files = tuple(
-        file
-        for file in ctx.production_files
-        if file.language in {"javascript", "typescript"}
+        file for file in ctx.production_files if file.language in {"javascript", "typescript"}
     )
 
-    def absent(reason, status="missing"):
-        return unavailable(
-            _ID,
-            _LABEL,
-            "complexity",
-            "eslint",
-            reason,
-            status=status,
-            eligible_files=len(files),
-        )
+    absent = partial(unavailable, _ID, _LABEL, "complexity", "eslint", eligible_files=len(files))
 
     if not files:
-        return absent("No JavaScript or TypeScript production files", "skipped")
+        return absent("No JavaScript or TypeScript production files", status="skipped")
     environment = _environment(ctx)
     if environment is None:
         return absent("Installed trusted Node/ESLint/parser dependencies unavailable")
@@ -138,19 +127,19 @@ def analyze_js_complexity(ctx: ScanContext) -> StageResult:
     if not valid_run(result):
         return absent(
             f"Controlled ESLint complexity invocation {result.status}; exit {result.returncode}",
-            failure_status(result),
+            status=failure_status(result),
         )
     try:
         functions, parse_errors = _observations(result.stdout, files)
     except (ValueError, TypeError):
         return absent(
             "Native ESLint complexity failed schema or code-path coverage validation",
-            "failed",
+            status="failed",
         )
     if parse_errors:
         return absent(
             "JS/TS syntax errors prevent complete function complexity evidence",
-            "limited",
+            status="limited",
         )
     metrics = _metrics(functions)
     return StageResult(

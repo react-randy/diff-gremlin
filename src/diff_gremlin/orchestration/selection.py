@@ -43,11 +43,18 @@ def python_capabilities() -> list[Capability]:
 
 
 def javascript_capabilities(languages: tuple[str, ...]) -> list[Capability]:
+    from diff_gremlin.analyzers.javascript.complexity import analyze_js_complexity
     from diff_gremlin.analyzers.javascript.duplication import analyze_js_duplication
     from diff_gremlin.analyzers.javascript.lint import analyze_js_lint
     from diff_gremlin.analyzers.javascript.types import analyze_ts_types
 
     result = [
+        Capability(
+            "complexity.javascript",
+            "JavaScript/TypeScript function complexity",
+            "complexity",
+            analyze_js_complexity,
+        ),
         Capability("javascript.lint.eslint", "JavaScript/TypeScript lint", "lint", analyze_js_lint),
         Capability(
             "javascript.duplication.jscpd",
@@ -92,7 +99,7 @@ def capabilities(languages: tuple[str, ...]) -> list[Capability]:
     from diff_gremlin.analyzers.complexity import analyze_complexity
 
     result = builtin_capabilities()
-    if languages:
+    if set(languages) - {"javascript", "typescript", "shell"}:
         result.append(
             Capability("complexity.lizard", "Function complexity", "complexity", analyze_complexity)
         )

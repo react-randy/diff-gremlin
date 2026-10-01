@@ -19,9 +19,7 @@ def context(tmp_path, source):
         "full",
         1,
         tmp_path,
-        lambda *a, **k: (_ for _ in ()).throw(
-            AssertionError("Hygiene must not execute source")
-        ),
+        lambda *a, **k: (_ for _ in ()).throw(AssertionError("Hygiene must not execute source")),
     )
 
 

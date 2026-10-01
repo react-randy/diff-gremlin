@@ -20,9 +20,7 @@ def local_history(git: Git, source: Path, destination: Path) -> Path:
             common.resolve() / "objects", destination / "objects", deadline=git.deadline
         )
     except OSError as exc:
-        raise RuntimeError(
-            "Local Git object storage could not be copied safely"
-        ) from exc
+        raise RuntimeError("Local Git object storage could not be copied safely") from exc
     return destination
 
 
@@ -60,9 +58,7 @@ def _fetch(git: Git, repo: Path, url: str, ref: str) -> None:
 
 
 def verify_sha(value: str) -> None:
-    if not isinstance(value, str) or not re.fullmatch(
-        r"[0-9a-f]{40}|[0-9a-f]{64}", value
-    ):
+    if not isinstance(value, str) or not re.fullmatch(r"[0-9a-f]{40}|[0-9a-f]{64}", value):
         raise ValueError("Review acquisition requires a full lowercase commit SHA")
 
 
@@ -76,8 +72,6 @@ def history_view(git: Git, source: Path, destination: Path, commit: str) -> Path
     """Give comparison sides independent HEADs over one owned object store."""
     fmt = git.run(["rev-parse", "--show-object-format"], cwd=source).strip()
     git.run(["init", "--bare", f"--object-format={fmt}", str(destination)])
-    (destination / "objects" / "info" / "alternates").write_text(
-        str(source / "objects") + "\n"
-    )
+    (destination / "objects" / "info" / "alternates").write_text(str(source / "objects") + "\n")
     pin_history(git, destination, commit)
     return destination

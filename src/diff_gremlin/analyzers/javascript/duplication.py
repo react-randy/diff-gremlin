@@ -3,9 +3,8 @@
 import json
 import math
 import tempfile
+from functools import partial
 from pathlib import Path
-
-from diff_gremlin.analyzers.status import unavailable
 
 from diff_gremlin.analyzers.javascript.installed import (
     installed_package,
@@ -18,6 +17,7 @@ from diff_gremlin.analyzers.javascript.output import (
     positive,
     valid_run,
 )
+from diff_gremlin.analyzers.status import unavailable
 from diff_gremlin.domain.context import ScanContext
 from diff_gremlin.domain.findings import Finding
 from diff_gremlin.domain.stages import StageResult
@@ -41,7 +41,7 @@ def _source_count(total: dict, eligible: int) -> int:
     return sources
 
 
-def _clone_location(location: dict, source: Path) -> Finding:
+def _clone_location(location: object, source: Path) -> Finding:
     if not isinstance(location, dict) or not isinstance(location.get("name"), str):
         raise TypeError("invalid clone location")
     path = Path(location["name"])
@@ -65,15 +65,12 @@ def _clones(rows: list, source: Path) -> list[Finding]:
         if not isinstance(row, dict) or not natural(row.get("lines")):
             raise ValueError("invalid clone record")
         findings.extend(
-            _clone_location(row.get(side), source)
-            for side in ("firstFile", "secondFile")
+            _clone_location(row.get(side), source) for side in ("firstFile", "secondFile")
         )
     return findings
 
 
-def _report(
-    report_path: Path, source: Path, eligible: int
-) -> tuple[float, list[Finding], int]:
+def _report(report_path: Path, source: Path, eligible: int) -> tuple[float, list[Finding], int]:
     data = json.loads(report_path.read_text(encoding="utf-8"))
     if not isinstance(data, dict) or not isinstance(data.get("statistics"), dict):
         raise TypeError("missing duplication statistics")
@@ -124,9 +121,7 @@ def _observe(ctx, files, node, binary):
             cwd=workspace,
         )
         observations = (
-            _report(output / "jscpd-report.json", source, len(files))
-            if valid_run(result)
-            else None
+            _report(output / "jscpd-report.json", source, len(files)) if valid_run(result) else None
         )
         return result, observations
 
@@ -134,29 +129,20 @@ def _observe(ctx, files, node, binary):
 def _environment(ctx):
     package = installed_package(ctx, "jscpd", "jscpd")
     binary, node = trusted_executable(ctx, "jscpd"), trusted_executable(ctx, "node")
-    return (package, binary, node) if all((package, binary, node)) else None
+    if package is None or binary is None or node is None:
+        return None
+    return package, binary, node
 
 
 def analyze_js_duplication(ctx: ScanContext) -> StageResult:
     files = tuple(
-        file
-        for file in ctx.production_files
-        if file.language in {"javascript", "typescript"}
+        file for file in ctx.production_files if file.language in {"javascript", "typescript"}
     )
 
-    def absent(reason, status="missing"):
-        return unavailable(
-            _ID,
-            _LABEL,
-            "duplication",
-            "jscpd",
-            reason,
-            status=status,
-            eligible_files=len(files),
-        )
+    absent = partial(unavailable, _ID, _LABEL, "duplication", "jscpd", eligible_files=len(files))
 
     if not files:
-        return absent("No JavaScript or TypeScript production files", "skipped")
+        return absent("No JavaScript or TypeScript production files", status="skipped")
     environment = _environment(ctx)
     if environment is None:
         return absent("Installed trusted Node/jscpd package unavailable")
@@ -166,13 +152,13 @@ def analyze_js_duplication(ctx: ScanContext) -> StageResult:
         if observations is None:
             return absent(
                 f"Controlled jscpd invocation {result.status}; exit {result.returncode}",
-                failure_status(result),
+                status=failure_status(result),
             )
         percentage, findings, count = observations
     except (OSError, ValueError, TypeError):
         return absent(
             "jscpd report missing, unreadable, or schema/coverage invalid for this invocation",
-            "failed",
+            status="failed",
         )
     return StageResult(
         _ID,

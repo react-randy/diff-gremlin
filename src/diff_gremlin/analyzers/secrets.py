@@ -7,11 +7,10 @@ import tempfile
 from collections import Counter
 from pathlib import Path
 
-from diff_gremlin.analyzers.status import unavailable
-from diff_gremlin.analyzers.versions import tool_version
-
 from diff_gremlin.analyzers.javascript.installed import trusted_executable
 from diff_gremlin.analyzers.javascript.output import failure_status, positive, valid_run
+from diff_gremlin.analyzers.status import unavailable
+from diff_gremlin.analyzers.versions import tool_version
 from diff_gremlin.domain.context import ScanContext
 from diff_gremlin.domain.findings import Finding
 from diff_gremlin.domain.stages import StageResult
@@ -29,9 +28,7 @@ _PROVIDER_RULES = (
     ("secret.npm-token", re.compile(r"\bnpm_[A-Za-z0-9]{36}\b")),
     (
         "secret.private-key",
-        re.compile(
-            r"-----BEGIN (?:RSA |EC |DSA |OPENSSH |ENCRYPTED )?PRIVATE KEY-----"
-        ),
+        re.compile(r"-----BEGIN (?:RSA |EC |DSA |OPENSSH |ENCRYPTED )?PRIVATE KEY-----"),
     ),
 )
 _ASSIGNMENT = re.compile(
@@ -46,8 +43,7 @@ def _candidate(value: str) -> bool:
     if len(value) < 12 or _PLACEHOLDER.search(value) or len(set(value)) < 6:
         return False
     entropy = -sum(
-        (count / len(value)) * math.log2(count / len(value))
-        for count in Counter(value).values()
+        (count / len(value)) * math.log2(count / len(value)) for count in Counter(value).values()
     )
     return entropy >= 3.0
 
@@ -115,11 +111,7 @@ def _analyze_patterns(ctx: ScanContext) -> StageResult:
 
 
 def _gitleaks_row(row, source, selected):
-    if (
-        not isinstance(row, dict)
-        or not isinstance(row.get("RuleID"), str)
-        or not row["RuleID"]
-    ):
+    if not isinstance(row, dict) or not isinstance(row.get("RuleID"), str) or not row["RuleID"]:
         raise ValueError("invalid Gitleaks rule")
     path = row.get("File")
     if not isinstance(path, str):
@@ -216,9 +208,7 @@ def _invoke_gitleaks(ctx, binary, source, workspace, report):
 
 def _report_findings(result, report, source, selected):
     findings = _gitleaks_findings(report, source, selected)
-    if (result.returncode == 0 and findings) or (
-        result.returncode == 1 and not findings
-    ):
+    if (result.returncode == 0 and findings) or (result.returncode == 1 and not findings):
         raise ValueError("Gitleaks exit/report evidence inconsistent")
     return findings
 

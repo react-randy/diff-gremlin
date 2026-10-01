@@ -24,11 +24,7 @@ def count(value: object) -> int:
 
 
 def number(value: object, *, minimum: float = 0, maximum: float = 100) -> float:
-    if (
-        isinstance(value, bool)
-        or not isinstance(value, (int, float))
-        or not math.isfinite(value)
-    ):
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
         raise ValueError("expected finite number")
     if not minimum <= value <= maximum:
         raise ValueError("number outside allowed range")

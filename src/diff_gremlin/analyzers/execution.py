@@ -59,16 +59,11 @@ class _Bindings(ast.NodeVisitor):
             self.shadowed.add(node.id)
 
     def visit_Import(self, node):
-        self.aliases.update(
-            {item.asname or item.name: item.name for item in node.names}
-        )
+        self.aliases.update({item.asname or item.name: item.name for item in node.names})
 
     def visit_ImportFrom(self, node):
         self.aliases.update(
-            {
-                item.asname or item.name: f"{node.module}.{item.name}"
-                for item in node.names
-            }
+            {item.asname or item.name: f"{node.module}.{item.name}" for item in node.names}
         )
 
     def visit_FunctionDef(self, node):
@@ -93,25 +88,16 @@ class _Scope:
 
 
 def _parameters(arguments):
-    names = {
-        arg.arg
-        for arg in (*arguments.posonlyargs, *arguments.args, *arguments.kwonlyargs)
-    }
-    names.update(
-        arg.arg for arg in (arguments.vararg, arguments.kwarg) if arg is not None
-    )
+    names = {arg.arg for arg in (*arguments.posonlyargs, *arguments.args, *arguments.kwonlyargs)}
+    names.update(arg.arg for arg in (arguments.vararg, arguments.kwarg) if arg is not None)
     return names
 
 
 def _process_rule(node: ast.Call, name: str):
-    shell = next(
-        (keyword.value for keyword in node.keywords if keyword.arg == "shell"), None
-    )
+    shell = next((keyword.value for keyword in node.keywords if keyword.arg == "shell"), None)
     if name.endswith(("getoutput", "getstatusoutput")):
         return "python.shell-execution", "high"
-    if shell is not None and not (
-        isinstance(shell, ast.Constant) and shell.value is False
-    ):
+    if shell is not None and not (isinstance(shell, ast.Constant) and shell.value is False):
         return "python.shell-execution", "high"
     return "python.process-call", "info"
 
@@ -193,9 +179,7 @@ class _PythonCalls(ast.NodeVisitor):
         for generator in node.generators:
             for condition in generator.ifs:
                 self.visit(condition)
-        expressions = (
-            (node.key, node.value) if isinstance(node, ast.DictComp) else (node.elt,)
-        )
+        expressions = (node.key, node.value) if isinstance(node, ast.DictComp) else (node.elt,)
         for expression in expressions:
             self.visit(expression)
         self.scopes.pop()
@@ -291,9 +275,7 @@ def _java_observations(ctx, files):
 
 def _pairs(ctx, calls):
     suspicious = {
-        f.path: f
-        for f in analyze_unicode(ctx).findings
-        if f.severity in {"medium", "high"}
+        f.path: f for f in analyze_unicode(ctx).findings if f.severity in {"medium", "high"}
     }
     return [
         Finding(
@@ -316,9 +298,7 @@ def _files(ctx, languages):
 
 def _unsupported(ctx):
     supported = {"python", "javascript", "typescript", "java", "", "unknown", "text"}
-    return sorted(
-        {file.language for file in ctx.files if file.language not in supported}
-    )
+    return sorted({file.language for file in ctx.files if file.language not in supported})
 
 
 def _status(reasons, files):
@@ -347,12 +327,8 @@ def analyze_execution(ctx: ScanContext) -> StageResult:
         _status(reasons, files),
         "builtin-ast/installed-parsers",
         metrics={
-            "call_count": sum(
-                f.rule != "security.obfuscated-execution" for f in findings
-            ),
-            "actionable_count": sum(
-                f.severity in {"medium", "high", "critical"} for f in findings
-            ),
+            "call_count": sum(f.rule != "security.obfuscated-execution" for f in findings),
+            "actionable_count": sum(f.severity in {"medium", "high", "critical"} for f in findings),
             "unsupported_languages": unsupported,
         },
         findings=findings,

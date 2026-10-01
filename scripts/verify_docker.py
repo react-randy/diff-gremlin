@@ -64,6 +64,53 @@ def write_control(root: Path) -> None:
     root.chmod(0o755)
 
 
+def checked_stages(data: dict) -> dict:
+    """Require valid evidence and pinned versions from every bundled adapter."""
+    stages = {stage["id"]: stage for stage in data["stages"]}
+    expected = (
+        "complexity.javascript",
+        "python.lint.ruff",
+        "python.types.pyrefly",
+        "python.health.pyscn",
+        "python.duplication.pyscn",
+        "python.maintainability.radon",
+        "javascript.lint.eslint",
+        "typescript.types.tsc",
+        "javascript.duplication.jscpd",
+        "java.structure",
+        "java.types",
+        "security.secrets",
+        "complexity.lizard",
+    )
+    failures = {
+        name: stages.get(name, {}).get("status", "absent")
+        for name in expected
+        if stages.get(name, {}).get("status") != "ok"
+    }
+    if failures:
+        raise ValueError(f"Docker control has invalid bundled analyzer evidence: {failures}")
+    pinned_versions = {
+        "python.lint.ruff": "0.16.8",
+        "python.types.pyrefly": "1.3.0",
+        "python.health.pyscn": "1.32.1",
+        "python.maintainability.radon": "6.0.1",
+        "javascript.lint.eslint": "10.11.0",
+        "complexity.javascript": "10.11.0",
+        "typescript.types.tsc": "6.0.3",
+        "javascript.duplication.jscpd": "4.2.3",
+        "security.secrets": "8.30.1",
+        "complexity.lizard": "1.24.0",
+    }
+    wrong_versions = {
+        name: stages[name].get("version")
+        for name, version in pinned_versions.items()
+        if stages[name].get("version") != version
+    }
+    if wrong_versions:
+        raise ValueError(f"Docker control has unexpected analyzer versions: {wrong_versions}")
+    return {name: stages[name] for name in expected}
+
+
 def check_control(image: str) -> None:
     """Require valid full analyzer evidence without modifying source files."""
     with tempfile.TemporaryDirectory(prefix="diff gremlin control ") as directory:
@@ -76,46 +123,7 @@ def check_control(image: str) -> None:
         if result.returncode not in (0, 1, 3):
             raise ValueError(f"Docker control failed ({result.returncode}): {result.stderr}")
         data = json.loads(result.stdout)
-        stages = {stage["id"]: stage for stage in data["stages"]}
-        expected = (
-            "python.lint.ruff",
-            "python.types.pyrefly",
-            "python.health.pyscn",
-            "python.duplication.pyscn",
-            "python.maintainability.radon",
-            "javascript.lint.eslint",
-            "typescript.types.tsc",
-            "javascript.duplication.jscpd",
-            "java.structure",
-            "java.types",
-            "security.secrets",
-            "complexity.lizard",
-        )
-        failures = {
-            name: stages.get(name, {}).get("status", "absent")
-            for name in expected
-            if stages.get(name, {}).get("status") != "ok"
-        }
-        if failures:
-            raise ValueError(f"Docker control has invalid bundled analyzer evidence: {failures}")
-        pinned_versions = {
-            "python.lint.ruff": "0.16.8",
-            "python.types.pyrefly": "1.3.0",
-            "python.health.pyscn": "1.32.1",
-            "python.maintainability.radon": "6.0.1",
-            "javascript.lint.eslint": "10.11.0",
-            "typescript.types.tsc": "6.0.3",
-            "javascript.duplication.jscpd": "4.2.3",
-            "security.secrets": "8.30.1",
-            "complexity.lizard": "1.24.0",
-        }
-        wrong_versions = {
-            name: stages[name].get("version")
-            for name, version in pinned_versions.items()
-            if stages[name].get("version") != version
-        }
-        if wrong_versions:
-            raise ValueError(f"Docker control has unexpected analyzer versions: {wrong_versions}")
+        stages = checked_stages(data)
         after = {p.relative_to(root): p.read_bytes() for p in root.rglob("*") if p.is_file()}
         if before != after:
             raise ValueError("Docker control modified the mounted source")
@@ -126,7 +134,7 @@ def check_control(image: str) -> None:
                     "coverage": data["coverage"],
                     "assessment": data["assessment"],
                     "exit_code": result.returncode,
-                    "versions": {name: stages[name]["version"] for name in expected},
+                    "versions": {name: stages[name]["version"] for name in stages},
                 }
             )
         )

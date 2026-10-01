@@ -4,9 +4,7 @@ import ast
 
 
 def _decision_increment(node: ast.AST) -> int:
-    if isinstance(
-        node, (ast.If, ast.For, ast.AsyncFor, ast.While, ast.IfExp, ast.ExceptHandler)
-    ):
+    if isinstance(node, (ast.If, ast.For, ast.AsyncFor, ast.While, ast.IfExp, ast.ExceptHandler)):
         return 1
     if isinstance(node, ast.BoolOp):
         return len(node.values) - 1
@@ -25,9 +23,7 @@ def _function_complexity(node: ast.FunctionDef | ast.AsyncFunctionDef) -> int:
     pending: list[ast.AST] = list(node.body)
     while pending:
         child = pending.pop()
-        if isinstance(
-            child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)
-        ):
+        if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef, ast.Lambda)):
             continue
         score += _decision_increment(child)
         pending.extend(ast.iter_child_nodes(child))

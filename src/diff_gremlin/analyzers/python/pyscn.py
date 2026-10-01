@@ -37,16 +37,12 @@ def _unobserved(reason: str, status: StageStatus, eligible: int) -> list[StageRe
 
 
 def _health(data: dict) -> tuple[dict, list]:
-    if not component_valid(data, "complexity") or not component_valid(
-        data, "dead_code"
-    ):
+    if not component_valid(data, "complexity") or not component_valid(data, "dead_code"):
         raise ValueError("PyScn health includes failed components")
     clone = object_value(data.get("clone"))
     if clone.get("success") is not True:
         raise ValueError("PyScn health includes failed clone analysis")
-    return {
-        "health_score": number(object_value(data.get("summary")).get("health_score"))
-    }, []
+    return {"health_score": number(object_value(data.get("summary")).get("health_score"))}, []
 
 
 def _run_pyscn(ctx: ScanContext, files: tuple[SourceFile, ...]) -> RunResult:
@@ -85,9 +81,7 @@ def _component_stages(
         lambda: deadcode_observations(ctx, files, data),
     )
     stages = []
-    for (stage_id, label, category, required), parser in zip(
-        _CAPABILITIES, parsers, strict=True
-    ):
+    for (stage_id, label, category, required), parser in zip(_CAPABILITIES, parsers, strict=True):
         try:
             metrics, findings = parser()
         except (ValueError, TypeError):
@@ -131,14 +125,10 @@ def analyze_pyscn(ctx: ScanContext) -> list[StageResult]:
     try:
         result = _run_pyscn(ctx, files)
     except OSError:
-        return _unobserved(
-            "Could not create controlled PyScn configuration", "failed", len(files)
-        )
+        return _unobserved("Could not create controlled PyScn configuration", "failed", len(files))
     status = execution_status(result, (0,))
     if status is not None:
-        return _unobserved(
-            "PyScn execution did not complete valid analysis", status, len(files)
-        )
+        return _unobserved("PyScn execution did not complete valid analysis", status, len(files))
     try:
         data = object_value(json_value(result.stdout))
         analyzed, partial = coverage(ctx, files, data)
@@ -148,6 +138,4 @@ def analyze_pyscn(ctx: ScanContext) -> list[StageResult]:
             "failed",
             len(files),
         )
-    return _component_stages(
-        ctx, files, data, analyzed, partial, result.duration_seconds
-    )
+    return _component_stages(ctx, files, data, analyzed, partial, result.duration_seconds)

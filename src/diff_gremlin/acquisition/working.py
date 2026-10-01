@@ -8,8 +8,7 @@ from pathlib import Path
 from diff_gremlin.acquisition.materialize import write_entry
 from diff_gremlin.acquisition.paths import safe_path
 from diff_gremlin.acquisition.working_reads import read_entry
-from diff_gremlin.acquisition.working_status import in_scope as in_scope
-from diff_gremlin.acquisition.working_status import working_tree_dirty as working_tree_dirty
+from diff_gremlin.acquisition.working_status import in_scope, working_tree_dirty
 from diff_gremlin.inventory import EXCLUDED_DIRECTORIES, MAX_ENTRIES, MAX_FILES, MAX_TREE_BYTES
 
 
@@ -65,3 +64,6 @@ def copy_working_tree(
     except OSError as exc:
         raise RuntimeError("Working source snapshot could not read a path safely") from exc
     return copied
+
+
+__all__ = ["in_scope", "working_tree_dirty"]

@@ -18,9 +18,7 @@ from diff_gremlin.domain.stages import StageResult
 _ID = "python.lint.ruff"
 
 
-def _findings(
-    ctx: ScanContext, files: tuple[SourceFile, ...], stdout: str
-) -> list[Finding]:
+def _findings(ctx: ScanContext, files: tuple[SourceFile, ...], stdout: str) -> list[Finding]:
     findings = []
     for value in list_value(json_value(stdout)):
         item = object_value(value)
@@ -47,9 +45,7 @@ def _findings(
 
 def analyze_ruff(ctx: ScanContext) -> StageResult:
     files = tuple(file for file in ctx.production_files if file.language == "python")
-    failure = partial(
-        unavailable, _ID, "Python lint", "lint", "ruff", eligible_files=len(files)
-    )
+    failure = partial(unavailable, _ID, "Python lint", "lint", "ruff", eligible_files=len(files))
     if not files:
         return failure(reason="No production Python files", status="unsupported")
     result = ctx.run(
@@ -67,17 +63,13 @@ def analyze_ruff(ctx: ScanContext) -> StageResult:
     )
     status = execution_status(result, (0, 1))
     if status is not None:
-        return failure(
-            reason="Ruff execution did not complete valid analysis", status=status
-        )
+        return failure(reason="Ruff execution did not complete valid analysis", status=status)
     try:
         findings = _findings(ctx, files, result.stdout)
         if (result.returncode == 1) != bool(findings):
             raise ValueError("Ruff exit status disagrees with diagnostic count")
     except (ValueError, TypeError):
-        return failure(
-            reason="Ruff output failed diagnostic schema validation", status="failed"
-        )
+        return failure(reason="Ruff output failed diagnostic schema validation", status="failed")
     return StageResult(
         _ID,
         "Python lint",

@@ -232,3 +232,16 @@ def test_release_staging_freezes_wheel_hash_without_changing_wheel(tmp_path):
         assert release.digest(destination / name) == checksum
     with pytest.raises(FileExistsError):
         release.stage_release(wheel, destination)
+
+
+def test_release_rejects_wheel_without_javascript_complexity_driver(tmp_path):
+    release, wheel = wheel_fixture(tmp_path)
+    omitted = "diff_gremlin/analyzers/javascript/assets/complexity.cjs"
+    with zipfile.ZipFile(wheel) as source:
+        members = {name: source.read(name) for name in source.namelist() if name != omitted}
+    with zipfile.ZipFile(wheel, "w") as archive:
+        for name, value in members.items():
+            archive.writestr(name, value)
+    with pytest.raises(KeyError):
+        release.stage_release(wheel, tmp_path / "release")
+    assert not (tmp_path / "release").exists()

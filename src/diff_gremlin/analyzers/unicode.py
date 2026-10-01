@@ -3,28 +3,30 @@
 import unicodedata
 
 from diff_gremlin.domain.context import ScanContext
-from diff_gremlin.domain.findings import Finding
+from diff_gremlin.domain.findings import Finding, Severity
 from diff_gremlin.domain.stages import StageResult
 
 _BIDI = {0x061C, 0x200E, 0x200F, *range(0x202A, 0x202F), *range(0x2066, 0x206A)}
 _HIDDEN = {0x180E, 0x200B, 0x2060, 0x2061, 0x2062, 0x2063, 0x2064}
 
 
+def _emoji(char: str) -> bool:
+    return ord(char) >= 0x1F000 or ord(char) in {0xFE0F, 0x2764}
+
+
+def _letter(char: str) -> bool:
+    return ord(char) > 127 and unicodedata.category(char).startswith(("L", "M"))
+
+
 def _legitimate_joiner(text: str, index: int) -> bool:
     if not 0 < index < len(text) - 1:
         return False
     before, after = text[index - 1], text[index + 1]
-    emoji = lambda char: ord(char) >= 0x1F000 or ord(char) in {0xFE0F, 0x2764}
-    letters = lambda char: (
-        ord(char) > 127 and unicodedata.category(char).startswith(("L", "M"))
-    )
-    return (emoji(before) and emoji(after)) or (letters(before) and letters(after))
+    return (_emoji(before) and _emoji(after)) or (_letter(before) and _letter(after))
 
 
 def _unexpected_tag(text, index):
-    return not any(
-        0x1F000 <= ord(char) < 0xE0000 for char in text[max(0, index - 12) : index]
-    )
+    return not any(0x1F000 <= ord(char) < 0xE0000 for char in text[max(0, index - 12) : index])
 
 
 def _unexpected_variation(text, index):
@@ -44,7 +46,7 @@ def _contextual_control(text, index, code):
     return None
 
 
-def _control_rule(text: str, index: int) -> tuple[str, str] | None:
+def _control_rule(text: str, index: int) -> tuple[str, Severity] | None:
     code = ord(text[index])
     if code in _BIDI:
         return "unicode.bidi-control", "high" if code in {0x202D, 0x202E} else "medium"

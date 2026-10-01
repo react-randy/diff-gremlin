@@ -1,8 +1,7 @@
 """Collect bounded TypeScript diagnostics with fixed compiler options."""
 
+from functools import partial
 from pathlib import Path
-
-from diff_gremlin.analyzers.status import unavailable
 
 from diff_gremlin.analyzers.javascript.installed import (
     installed_package,
@@ -16,6 +15,7 @@ from diff_gremlin.analyzers.javascript.output import (
     natural,
     valid_run,
 )
+from diff_gremlin.analyzers.status import unavailable
 from diff_gremlin.domain.context import ScanContext
 from diff_gremlin.domain.stages import StageResult
 
@@ -35,10 +35,7 @@ def _diagnostics(stdout, files):
     ):
         raise ValueError("invalid diagnostic counts")
     findings = located_findings(data["findings"], files)
-    if (
-        len(findings) + data["global_count"]
-        != data["error_count"] + data["warning_count"]
-    ):
+    if len(findings) + data["global_count"] != data["error_count"] + data["warning_count"]:
         raise ValueError("incomplete diagnostic counts")
     return data, findings
 
@@ -61,23 +58,12 @@ def _type_limit(data):
 
 
 def analyze_ts_types(ctx: ScanContext) -> StageResult:
-    files = tuple(
-        file for file in ctx.production_files if file.language == "typescript"
-    )
+    files = tuple(file for file in ctx.production_files if file.language == "typescript")
 
-    def absent(reason, status="missing"):
-        return unavailable(
-            _ID,
-            _LABEL,
-            "types",
-            "typescript",
-            reason,
-            status=status,
-            eligible_files=len(files),
-        )
+    absent = partial(unavailable, _ID, _LABEL, "types", "tsc", eligible_files=len(files))
 
     if not files:
-        return absent("No TypeScript production files", "skipped")
+        return absent("No TypeScript production files", status="skipped")
     environment = _type_environment(ctx)
     if environment is None:
         return absent("Installed trusted Node/TypeScript package unavailable")
@@ -94,13 +80,13 @@ def analyze_ts_types(ctx: ScanContext) -> StageResult:
     if not valid_run(result):
         return absent(
             f"Controlled TypeScript invocation {result.status}; exit {result.returncode}",
-            failure_status(result),
+            status=failure_status(result),
         )
     try:
         data, findings = _diagnostics(result.stdout, files)
     except (ValueError, TypeError):
         return absent(
-            "Controlled TypeScript returned malformed or incomplete evidence", "failed"
+            "Controlled TypeScript returned malformed or incomplete evidence", status="failed"
         )
     limited = _type_limit(data)
     return StageResult(

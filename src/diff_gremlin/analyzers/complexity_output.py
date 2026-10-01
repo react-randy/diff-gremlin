@@ -27,15 +27,12 @@ def _verify_function_counts(seen: dict[str, int], functions: list[dict]) -> None
             raise ValueError("Lizard file count disagrees with function observations")
 
 
-def _verify_python_declarations(
-    files: tuple[SourceFile, ...], seen: dict[str, int]
-) -> None:
+def _verify_python_declarations(files: tuple[SourceFile, ...], seen: dict[str, int]) -> None:
     for file in files:
         if file.path.suffix.lower() == ".py":
             tree = ast.parse(file.path.read_text(encoding="utf-8"))
             expected = sum(
-                isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
-                for node in ast.walk(tree)
+                isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) for node in ast.walk(tree)
             )
             if expected != seen[file.relative_path]:
                 raise ValueError("Lizard missed Python function declarations")
@@ -48,9 +45,7 @@ def _values(item: ET.Element, length: int) -> list[int]:
     return values
 
 
-def _functions(
-    ctx: ScanContext, files: tuple[SourceFile, ...], measure: ET.Element
-) -> list[dict]:
+def _functions(ctx: ScanContext, files: tuple[SourceFile, ...], measure: ET.Element) -> list[dict]:
     observations = {}
     for item in measure.findall("item"):
         name, location = item.attrib["name"].rsplit(" at ", 1)
@@ -76,9 +71,7 @@ def _functions(
     )
 
 
-def observations(
-    ctx: ScanContext, files: tuple[SourceFile, ...], text: str
-) -> list[dict]:
+def observations(ctx: ScanContext, files: tuple[SourceFile, ...], text: str) -> list[dict]:
     if "<!DOCTYPE" in text.upper() or "<!ENTITY" in text.upper():
         raise ValueError("unsupported XML declaration")
     root = ET.fromstring(text)

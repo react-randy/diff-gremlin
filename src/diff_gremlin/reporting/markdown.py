@@ -5,12 +5,13 @@ from diff_gremlin.policy.metrics import stage_score
 from diff_gremlin.policy.thresholds import POLICY_VERSION
 from diff_gremlin.reporting.advice import next_actions
 from diff_gremlin.reporting.escaping import markdown as escape
+from diff_gremlin.reporting.provenance import revision_label
 
 
 def summary_lines(report: ScanReport) -> list[str]:
     a = report.assessment
     score = "unknown" if a.score is None else f"{a.score:g}/100 ({a.grade})"
-    identity = report.source.commit_sha or "working tree"
+    identity = revision_label(report.source)
     return [
         "# Diff Gremlin",
         "",

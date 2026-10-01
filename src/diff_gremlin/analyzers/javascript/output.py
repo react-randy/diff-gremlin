@@ -1,6 +1,7 @@
 """Validate evidence emitted by controlled analysis drivers."""
 
 import json
+from typing import TypeGuard
 
 from diff_gremlin.domain.context import SourceFile
 from diff_gremlin.domain.findings import Finding
@@ -8,11 +9,11 @@ from diff_gremlin.domain.process import RunResult
 from diff_gremlin.domain.stages import StageStatus
 
 
-def natural(value: object) -> bool:
+def natural(value: object) -> TypeGuard[int]:
     return isinstance(value, int) and not isinstance(value, bool) and value >= 0
 
 
-def positive(value: object) -> bool:
+def positive(value: object) -> TypeGuard[int]:
     return natural(value) and value > 0
 
 

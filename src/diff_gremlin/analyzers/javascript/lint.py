@@ -1,8 +1,7 @@
 """Run installed ESLint against an owned flat configuration."""
 
+from functools import partial
 from pathlib import Path
-
-from diff_gremlin.analyzers.status import unavailable
 
 from diff_gremlin.analyzers.javascript.installed import (
     installed_package,
@@ -17,6 +16,7 @@ from diff_gremlin.analyzers.javascript.output import (
     natural,
     valid_run,
 )
+from diff_gremlin.analyzers.status import unavailable
 from diff_gremlin.domain.context import ScanContext
 from diff_gremlin.domain.stages import StageResult
 
@@ -25,9 +25,7 @@ _ID, _LABEL = "javascript.lint.eslint", "JavaScript/TypeScript lint"
 
 def _diagnostics(stdout, files):
     data = evidence(stdout, files)
-    if not all(
-        natural(data.get(k)) for k in ("error_count", "warning_count", "fatal_count")
-    ):
+    if not all(natural(data.get(k)) for k in ("error_count", "warning_count", "fatal_count")):
         raise ValueError("invalid diagnostic counts")
     findings = located_findings(data["findings"], files)
     if len(findings) != data["error_count"] + data["warning_count"]:
@@ -55,24 +53,13 @@ def _lint_environment(ctx):
 
 def analyze_js_lint(ctx: ScanContext) -> StageResult:
     files = tuple(
-        file
-        for file in ctx.production_files
-        if file.language in {"javascript", "typescript"}
+        file for file in ctx.production_files if file.language in {"javascript", "typescript"}
     )
 
-    def absent(reason, status="missing"):
-        return unavailable(
-            _ID,
-            _LABEL,
-            "lint",
-            "eslint",
-            reason,
-            status=status,
-            eligible_files=len(files),
-        )
+    absent = partial(unavailable, _ID, _LABEL, "lint", "eslint", eligible_files=len(files))
 
     if not files:
-        return absent("No JavaScript or TypeScript production files", "skipped")
+        return absent("No JavaScript or TypeScript production files", status="skipped")
     environment = _lint_environment(ctx)
     if environment is None:
         return absent(
@@ -93,13 +80,13 @@ def analyze_js_lint(ctx: ScanContext) -> StageResult:
     if not valid_run(result):
         return absent(
             f"Controlled ESLint invocation {result.status}; exit {result.returncode}",
-            failure_status(result),
+            status=failure_status(result),
         )
     try:
         data, findings = _diagnostics(result.stdout, files)
     except (ValueError, TypeError):
         return absent(
-            "Controlled ESLint returned malformed or incomplete evidence", "failed"
+            "Controlled ESLint returned malformed or incomplete evidence", status="failed"
         )
     return StageResult(
         _ID,

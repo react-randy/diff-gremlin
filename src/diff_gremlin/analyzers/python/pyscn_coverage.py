@@ -5,9 +5,7 @@ from diff_gremlin.analyzers.python.schema import count, list_value, object_value
 from diff_gremlin.domain.context import ScanContext, SourceFile
 
 
-def coverage(
-    ctx: ScanContext, files: tuple[SourceFile, ...], data: dict
-) -> tuple[int, bool]:
+def coverage(ctx: ScanContext, files: tuple[SourceFile, ...], data: dict) -> tuple[int, bool]:
     if type(data.get("schema_version")) is not int or data["schema_version"] != 1:
         raise ValueError("unsupported PyScn schema version")
     summary = object_value(data.get("summary"))

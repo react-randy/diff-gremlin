@@ -80,23 +80,17 @@ def analyze_history(
         shallow = reader.is_shallow()
         anchor = reader.revision(revision)
         if not anchor:
-            return failure(
-                reason="Git repository has no committed history", status="unsupported"
-            )
+            return failure(reason="Git repository has no committed history", status="unsupported")
         rows = reader.rows(anchor, limit)
     except FileNotFoundError:
         return failure(reason="Git is not installed", status="missing")
     except TimeoutError:
-        return failure(
-            reason="Bounded Git history analysis timed out", status="timeout"
-        )
+        return failure(reason="Bounded Git history analysis timed out", status="timeout")
     except (ValueError, UnicodeError, SyntaxError, RecursionError, MemoryError):
         return failure(
             reason="Git history or Python object analysis failed validation",
             status="failed",
         )
     if not rows:
-        return failure(
-            reason="No commits available for history analysis", status="unsupported"
-        )
+        return failure(reason="No commits available for history analysis", status="unsupported")
     return _history_result(ctx, rows, shallow, anchor, limit)

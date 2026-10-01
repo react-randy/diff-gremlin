@@ -72,9 +72,7 @@ def analyze_maintainability(ctx: ScanContext) -> StageResult:
         return failure(reason="Radon package is not installed", status="missing")
     status = execution_status(result, (0,))
     if status is not None:
-        return failure(
-            reason="Radon MI execution did not complete valid analysis", status=status
-        )
+        return failure(reason="Radon MI execution did not complete valid analysis", status=status)
     try:
         version, indices = _indices(ctx, files, result.stdout)
     except (ValueError, TypeError):

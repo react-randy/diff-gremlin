@@ -13,6 +13,7 @@ VERSION = "1.0.0"
 ASSETS = (
     "diff_gremlin/analyzers/java/assets/StructureProbe.java",
     "diff_gremlin/analyzers/javascript/assets/lint.cjs",
+    "diff_gremlin/analyzers/javascript/assets/complexity.cjs",
     "diff_gremlin/analyzers/javascript/assets/types.cjs",
     "diff_gremlin/analyzers/javascript/assets/execution.cjs",
     "diff_gremlin/analyzers/assets/gitleaks-v8.30.1.toml",
