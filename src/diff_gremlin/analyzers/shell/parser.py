@@ -5,6 +5,8 @@ import time
 from dataclasses import dataclass, field
 
 from diff_gremlin.analyzers.javascript.installed import trusted_executable
+from diff_gremlin.analyzers.shell.calls import call_findings
+from diff_gremlin.analyzers.shell.decisions import function_rows
 from diff_gremlin.analyzers.shell.dialect import dialect
 from diff_gremlin.analyzers.shell.schema import MAX_JSON_BYTES, decode
 from diff_gremlin.analyzers.shell.source import (
@@ -17,7 +19,7 @@ from diff_gremlin.domain.findings import Finding
 from diff_gremlin.domain.stages import StageStatus
 
 VERSION = "3.14.1"
-MAX_TOTAL_OUTPUT_BYTES = 16 * 1024 * 1024
+MAX_TOTAL_OUTPUT_BYTES = 256 * 1024 * 1024
 
 
 @dataclass
@@ -45,9 +47,11 @@ class Budget:
 
 @dataclass
 class Parsed:
-    """Internal validated trees and safe per-file failure evidence."""
+    """Compact validated observations and safe per-file failure evidence."""
 
-    trees: list[tuple[SourceFile, dict]] = field(default_factory=list)
+    analyzed: int = 0
+    calls: list[Finding] = field(default_factory=list)
+    functions: list[dict] = field(default_factory=list)
     findings: list[Finding] = field(default_factory=list)
     reasons: list[str] = field(default_factory=list)
     status: StageStatus = "ok"
@@ -136,7 +140,12 @@ def parse_file(
             parsed.findings.append(syntax_finding(file, result.stderr, source))
         return
     try:
-        parsed.trees.append((file, decode(result.stdout, source)))
+        tree = decode(result.stdout, source)
+        calls = call_findings(tree, file.relative_path)
+        functions = function_rows(tree, file.relative_path)
+        parsed.calls.extend(calls)
+        parsed.functions.extend(functions)
+        parsed.analyzed += 1
     except (ValueError, TypeError, KeyError, RecursionError):
         parsed.reasons.append(
             f"Shell AST schema or resource validation failed: {file.relative_path}"

@@ -5,9 +5,9 @@ import stat
 
 from diff_gremlin.domain.context import ScanContext, SourceFile
 
-MAX_SOURCE_BYTES = 1024 * 1024
-MAX_FILES = 512
-MAX_TOTAL_SOURCE_BYTES = 8 * 1024 * 1024
+MAX_SOURCE_BYTES = 8 * 1024 * 1024
+MAX_FILES = 4096
+MAX_TOTAL_SOURCE_BYTES = 32 * 1024 * 1024
 
 
 def read_source(ctx: ScanContext, file: SourceFile) -> str:

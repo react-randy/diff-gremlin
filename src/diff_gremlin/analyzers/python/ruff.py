@@ -1,7 +1,10 @@
 """Produce Python lint observations from isolated Ruff JSON output."""
 
+import time
+from dataclasses import replace
 from functools import partial
 
+from diff_gremlin.analyzers.batches import collect_batches
 from diff_gremlin.analyzers.locations import SourceLocations
 from diff_gremlin.analyzers.python.schema import (
     count,
@@ -9,10 +12,11 @@ from diff_gremlin.analyzers.python.schema import (
     list_value,
     object_value,
 )
-from diff_gremlin.analyzers.status import execution_status, unavailable
+from diff_gremlin.analyzers.status import unavailable
 from diff_gremlin.analyzers.versions import tool_version
 from diff_gremlin.domain.context import ScanContext, SourceFile
 from diff_gremlin.domain.findings import Finding
+from diff_gremlin.domain.process import RunResult
 from diff_gremlin.domain.stages import StageResult
 
 _ID = "python.lint.ruff"
@@ -46,6 +50,15 @@ def _findings(
     return findings
 
 
+def _validated_batch(
+    ctx: ScanContext, files: tuple[SourceFile, ...], result: RunResult
+) -> list[Finding]:
+    findings = _findings(ctx, files, result.stdout)
+    if (result.returncode == 1) != bool(findings):
+        raise ValueError("Ruff exit status disagrees with diagnostic count")
+    return findings
+
+
 def analyze_ruff(ctx: ScanContext) -> StageResult:
     files = tuple(file for file in ctx.production_files if file.language == "python")
     failure = partial(
@@ -53,42 +66,30 @@ def analyze_ruff(ctx: ScanContext) -> StageResult:
     )
     if not files:
         return failure(reason="No production Python files", status="unsupported")
-    result = ctx.run(
-        [
-            "ruff",
-            "check",
-            "--isolated",
-            "--no-cache",
-            "--output-format",
-            "json",
-            "--",
-            *(str(file.path) for file in files),
-        ],
-        cwd=ctx.scratch,
+    started = time.monotonic()
+    evidence = collect_batches(
+        ctx,
+        files,
+        ["ruff", "check", "--isolated", "--no-cache", "--output-format", "json"],
+        (0, 1),
+        partial(_validated_batch, ctx),
     )
-    status = execution_status(result, (0, 1))
-    if status is not None:
-        return failure(
-            reason="Ruff execution did not complete valid analysis", status=status
-        )
-    try:
-        findings = _findings(ctx, files, result.stdout)
-        if (result.returncode == 1) != bool(findings):
-            raise ValueError("Ruff exit status disagrees with diagnostic count")
-    except (ValueError, TypeError):
-        return failure(
-            reason="Ruff output failed diagnostic schema validation", status="failed"
-        )
+    version = (
+        tool_version(replace(ctx, timeout=evidence.remaining_time()), "ruff")
+        if evidence.remaining_time() > 0
+        else ""
+    )
     return StageResult(
         _ID,
         "Python lint",
         "lint",
-        "ok",
+        evidence.status,
         "ruff",
-        version=tool_version(ctx, "ruff"),
-        metrics={"issue_count": len(findings)},
-        findings=findings,
+        version=version,
+        metrics={"issue_count": len(evidence.values)} if evidence.analyzed else {},
+        findings=evidence.values,
+        reason=f"Ruff {evidence.reason}" if evidence.reason else "",
         eligible_files=len(files),
-        analyzed_files=len(files),
-        duration_seconds=result.duration_seconds,
+        analyzed_files=evidence.analyzed,
+        duration_seconds=time.monotonic() - started,
     )

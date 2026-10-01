@@ -59,7 +59,7 @@ def _status(reasons, files):
 
 def analyze_execution(ctx: ScanContext) -> StageResult:
     observations = (
-        observe_python_calls(_files(ctx, {"python"})),
+        observe_python_calls(_files(ctx, {"python"}), timeout=ctx.timeout),
         observe_javascript_calls(ctx, _files(ctx, {"javascript", "typescript"})),
         observe_java_calls(ctx, _files(ctx, {"java"})),
         shell_observations(ctx, _files(ctx, {"shell"})),

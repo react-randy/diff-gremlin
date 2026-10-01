@@ -9,7 +9,9 @@ _VERSION = re.compile(r"\b\d+(?:\.\d+)+(?:[-+][A-Za-z0-9.]+)?\b")
 
 def tool_version(ctx: ScanContext, executable: str) -> str:
     """Return a version token, never untrusted repository output or a grade."""
-    result = ctx.run([executable, "--version"], cwd=ctx.scratch, timeout=10)
+    result = ctx.run(
+        [executable, "--version"], cwd=ctx.scratch, timeout=min(10, ctx.timeout)
+    )
     if result.status != "ok" or result.returncode != 0:
         return ""
     match = _VERSION.search(result.stdout or result.stderr)
