@@ -111,6 +111,7 @@ jobs:
       - name: Remove registry credentials
         if: always()
         run: |
+          export DOCKER_CONFIG="$RUNNER_TEMP/publication-docker"
           trap 'rm -f "$DOCKER_CONFIG/config.json"' EXIT
           docker logout ghcr.io
 
@@ -173,5 +174,6 @@ jobs:
       - name: Remove registry credentials
         if: always()
         run: |
+          export DOCKER_CONFIG="$RUNNER_TEMP/publication-docker"
           trap 'rm -f "$DOCKER_CONFIG/config.json"' EXIT
           docker logout ghcr.io
