@@ -19,7 +19,9 @@ def parser() -> argparse.ArgumentParser:
     guard = commands.add_parser("guard")
     guard.add_argument("--sha")
     guard.add_argument("--release-id")
-    commands.add_parser("absent").add_argument("--docker-config", type=Path, required=True)
+    commands.add_parser("absent").add_argument(
+        "--docker-config", type=Path, required=True
+    )
     for name in ("receipt", "sources", "index"):
         command = commands.add_parser(name)
         command.add_argument("--sha", required=True)
@@ -51,7 +53,9 @@ def execute(args: argparse.Namespace) -> None:
         )
         receipts.write_receipt(args.output, receipt)
     else:
-        proofs = receipts.read_receipts(args.receipts, args.sha, args.run_id, args.attempt)
+        proofs = receipts.read_receipts(
+            args.receipts, args.sha, args.run_id, args.attempt
+        )
         if args.command == "sources":
             for architecture in ARCHITECTURES:
                 print(f"{IMAGE}@{proofs[architecture]}")
@@ -68,5 +72,7 @@ def main() -> int:
     except ValueError as error:
         arguments.exit(1, f"Image publication gate failed: {error}\n")
     except (KeyError, TypeError, OSError, urllib.error.URLError):
-        arguments.exit(1, "Image publication gate failed: metadata unavailable or malformed\n")
+        arguments.exit(
+            1, "Image publication gate failed: metadata unavailable or malformed\n"
+        )
     return 0

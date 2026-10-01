@@ -24,7 +24,9 @@ def require(condition: bool, message: str) -> None:
 
 def sha(value: str) -> str:
     """Accept only a complete Git commit identity."""
-    require(bool(re.fullmatch(r"[0-9a-f]{40}", value)), "Invalid source commit identity")
+    require(
+        bool(re.fullmatch(r"[0-9a-f]{40}", value)), "Invalid source commit identity"
+    )
     return value
 
 

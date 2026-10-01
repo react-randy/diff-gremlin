@@ -1,8 +1,6 @@
 """Reject stale releases, ambiguous registry failures and substituted image receipts."""
 
 import base64
-import importlib
-import importlib.util
 import json
 import subprocess
 import sys
@@ -12,19 +10,15 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).parents[1]
-SPEC = importlib.util.spec_from_file_location(
-    "image_publication_support", ROOT / "scripts/image_publication_support/__init__.py"
+from scripts.image_publication_support import (
+    identity,
+    policy,
+    receipts,
+    registry,
+    transport,
 )
-assert SPEC and SPEC.loader
-support = importlib.util.module_from_spec(SPEC)
-sys.modules[SPEC.name] = support
-SPEC.loader.exec_module(support)
-identity = importlib.import_module("image_publication_support.identity")
-registry = importlib.import_module("image_publication_support.registry")
-receipts = importlib.import_module("image_publication_support.receipts")
-transport = importlib.import_module("image_publication_support.transport")
-policy = importlib.import_module("image_publication_support.policy")
+
+ROOT = Path(__file__).parents[1]
 SOURCE = "a" * 40
 DIGESTS = {"amd64": "sha256:" + "1" * 64, "arm64": "sha256:" + "2" * 64}
 
@@ -144,7 +138,9 @@ def test_untrusted_event_cannot_publish(context, release, event_name):
         ("a" * 7, SOURCE, SOURCE, None),
     ],
 )
-def test_moving_or_nonimmutable_source_cannot_publish(context, tag, main, checkout, expected):
+def test_moving_or_nonimmutable_source_cannot_publish(
+    context, tag, main, checkout, expected
+):
     context["GITHUB_SHA"] = checkout
     with pytest.raises(ValueError):
         identity.validate_source(context, tag, main, expected)
@@ -229,7 +225,9 @@ def test_final_index_requires_both_native_proofs(tmp_path):
         ([f"{policy.IMAGE}@{DIGESTS['amd64']}"], "linux/arm64"),
     ],
 )
-def test_pushed_receipt_requires_correct_platform_and_unambiguous_digest(references, platform):
+def test_pushed_receipt_requires_correct_platform_and_unambiguous_digest(
+    references, platform
+):
     with pytest.raises(ValueError):
         receipts.pushed_receipt("amd64", SOURCE, "42", "1", platform, references)
 
@@ -248,7 +246,9 @@ def test_published_index_must_match_exact_native_digests():
         receipts.validate_index(manifest, DIGESTS)
 
 
-@pytest.mark.parametrize("architecture", ["386", "$(touch sentinel)", "amd64\nversion=latest"])
+@pytest.mark.parametrize(
+    "architecture", ["386", "$(touch sentinel)", "amd64\nversion=latest"]
+)
 def test_receipt_rejects_unowned_architecture(architecture):
     with pytest.raises(ValueError):
         receipts.receipt_identity(architecture, SOURCE, "42", "1")
@@ -308,25 +308,33 @@ def test_guard_resolves_live_identity_and_writes_only_fixed_outputs(
         identity.guard(SOURCE, "124")
 
 
-@pytest.mark.parametrize("destination", ["https://other.example/token", "http://ghcr.io/token"])
+@pytest.mark.parametrize(
+    "destination", ["https://other.example/token", "http://ghcr.io/token"]
+)
 def test_registry_credentials_cannot_follow_foreign_or_http_redirects(destination):
-    request = urllib.request.Request("https://ghcr.io/token", headers={"Authorization": "fake"})
+    request = urllib.request.Request(
+        "https://ghcr.io/token", headers={"Authorization": "fake"}
+    )
     with pytest.raises(urllib.error.URLError, match="outside its origin"):
-        transport.PublicationRedirects().redirect_request(request, None, 302, "", {}, destination)
+        transport.PublicationRedirects().redirect_request(
+            request, None, 302, "", {}, destination
+        )
 
 
 def test_malformed_registry_credentials_fail_without_disclosure(tmp_path):
     secret = "FAKE_LOGIN_SECRET\ninvalid"
-    (tmp_path / "config.json").write_text(json.dumps({"auths": {"ghcr.io": {"auth": secret}}}))
+    (tmp_path / "config.json").write_text(
+        json.dumps({"auths": {"ghcr.io": {"auth": secret}}})
+    )
     with pytest.raises(ValueError) as error:
         registry.registry_token(tmp_path)
     assert "FAKE" not in str(error.value)
 
 
-def invoke_publication(arguments, directory, data=None):
+def invoke_publication(arguments, data=None):
     return subprocess.run(
-        [sys.executable, str(ROOT / "scripts/image_publication.py"), *arguments],
-        cwd=directory,
+        [sys.executable, "-m", "scripts.image_publication", *arguments],
+        cwd=ROOT,
         input=json.dumps(data) if data is not None else None,
         text=True,
         capture_output=True,
@@ -335,8 +343,8 @@ def invoke_publication(arguments, directory, data=None):
     )
 
 
-def test_thin_entry_preserves_cli_from_another_working_directory(tmp_path):
-    result = invoke_publication(["--help"], tmp_path)
+def test_publication_module_preserves_cli_from_trusted_checkout():
+    result = invoke_publication(["--help"])
     assert result.returncode == 0
     assert (
         "Check the fixed Diff Gremlin release and its container publication receipts."
@@ -361,14 +369,15 @@ def test_public_cli_receipt_sources_and_index_cross_module_boundaries(tmp_path):
                 "--output",
                 str(output),
             ],
-            tmp_path,
             [f"{policy.IMAGE}@{value}"],
         )
         assert result.returncode == 0, result.stderr
         assert json.loads(output.read_text())["digest"] == value
-    result = invoke_publication(["sources", *common, "--receipts", str(directory)], tmp_path)
+    result = invoke_publication(["sources", *common, "--receipts", str(directory)])
     assert result.returncode == 0, result.stderr
-    assert result.stdout.splitlines() == [f"{policy.IMAGE}@{value}" for value in DIGESTS.values()]
+    assert result.stdout.splitlines() == [
+        f"{policy.IMAGE}@{value}" for value in DIGESTS.values()
+    ]
     manifest = {
         "mediaType": policy.MANIFEST_TYPES[0],
         "manifests": [
@@ -378,11 +387,13 @@ def test_public_cli_receipt_sources_and_index_cross_module_boundaries(tmp_path):
     }
     result = invoke_publication(
         ["index", *common, "--receipts", str(directory)],
-        tmp_path,
         manifest,
     )
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == "Published index matches both validated native image receipts"
+    assert (
+        result.stdout.strip()
+        == "Published index matches both validated native image receipts"
+    )
 
 
 def test_public_cli_does_not_write_invalid_platform_receipt(tmp_path):
@@ -403,10 +414,11 @@ def test_public_cli_does_not_write_invalid_platform_receipt(tmp_path):
             "--output",
             str(output),
         ],
-        tmp_path,
         [f"{policy.IMAGE}@{DIGESTS['amd64']}"],
     )
     assert result.returncode == 1
-    assert "Image publication gate failed: Built image platform mismatch" in result.stderr
+    assert (
+        "Image publication gate failed: Built image platform mismatch" in result.stderr
+    )
     assert result.stdout == ""
     assert not output.exists()

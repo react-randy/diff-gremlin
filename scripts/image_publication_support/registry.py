@@ -12,7 +12,9 @@ from .policy import IMAGE, MANIFEST_TYPES, REPOSITORY, VERSION, require
 def registry_token(config: Path) -> str:
     """Exchange isolated Docker login credentials for a scoped GHCR read token."""
     auth = json.loads((config / "config.json").read_text())["auths"]["ghcr.io"]["auth"]
-    require(isinstance(auth, str) and bool(auth), "Missing isolated GHCR login credentials")
+    require(
+        isinstance(auth, str) and bool(auth), "Missing isolated GHCR login credentials"
+    )
     try:
         base64.b64decode(auth, validate=True)
     except ValueError:
@@ -25,20 +27,25 @@ def registry_token(config: Path) -> str:
     token = result.get("token")
     if not isinstance(token, str) or not token:
         raise ValueError("GHCR authentication returned no token")
-    require(bool(re.fullmatch(r"[A-Za-z0-9._~+/=-]+", token)), "Malformed GHCR read token")
+    require(
+        bool(re.fullmatch(r"[A-Za-z0-9._~+/=-]+", token)), "Malformed GHCR read token"
+    )
     return token
 
 
 def validate_absence(status: int, body: dict) -> None:
     """Only a registry's explicit authenticated missing-manifest response means absent."""
     require(status != 200, "Refusing to overwrite existing image version 1.0.0")
-    require(status == 404, f"GHCR version lookup failed (HTTP {status}); absence unproven")
+    require(
+        status == 404, f"GHCR version lookup failed (HTTP {status}); absence unproven"
+    )
     errors = body.get("errors")
     if not isinstance(errors, list) or not errors:
         raise ValueError("GHCR absence response lacks errors")
     require(
         all(
-            isinstance(e, dict) and e.get("code") in ("MANIFEST_UNKNOWN", "NAME_UNKNOWN")
+            isinstance(e, dict)
+            and e.get("code") in ("MANIFEST_UNKNOWN", "NAME_UNKNOWN")
             for e in errors
         ),
         "GHCR version lookup did not prove manifest absence",

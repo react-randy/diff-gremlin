@@ -21,12 +21,19 @@ def receipt_identity(architecture: str, source: str, run_id: str, attempt: str) 
 
 
 def pushed_receipt(
-    architecture: str, source: str, run_id: str, attempt: str, platform: str, references: list
+    architecture: str,
+    source: str,
+    run_id: str,
+    attempt: str,
+    platform: str,
+    references: list,
 ) -> dict:
     """Validate one native build's platform and successfully pushed digest."""
     receipt = receipt_identity(architecture, source, run_id, attempt)
     require(platform == f"linux/{architecture}", "Built image platform mismatch")
-    require(isinstance(references, list) and len(references) == 1, "Ambiguous pushed digest")
+    require(
+        isinstance(references, list) and len(references) == 1, "Ambiguous pushed digest"
+    )
     reference = references[0]
     require(
         isinstance(reference, str) and reference.startswith(f"{IMAGE}@"),
@@ -42,7 +49,9 @@ def write_receipt(output: Path, receipt: dict) -> None:
     output.write_text(json.dumps(receipt, sort_keys=True) + "\n")
 
 
-def read_receipts(directory: Path, source: str, run_id: str, attempt: str) -> dict[str, str]:
+def read_receipts(
+    directory: Path, source: str, run_id: str, attempt: str
+) -> dict[str, str]:
     """Require exactly one current-attempt receipt for each required architecture."""
     paths = sorted(directory.glob("*/*.json"))
     require(len(paths) == 2, "Expected exactly two native image receipts")
@@ -51,24 +60,38 @@ def read_receipts(directory: Path, source: str, run_id: str, attempt: str) -> di
         receipt = json.loads(path.read_text())
         architecture = receipt.get("architecture")
         expected = receipt_identity(architecture, source, run_id, attempt)
-        require(set(receipt) == {*expected, "digest"}, "Unexpected native receipt fields")
-        require(all(receipt[k] == v for k, v in expected.items()), "Receipt identity mismatch")
+        require(
+            set(receipt) == {*expected, "digest"}, "Unexpected native receipt fields"
+        )
+        require(
+            all(receipt[k] == v for k, v in expected.items()),
+            "Receipt identity mismatch",
+        )
         require(architecture not in result, "Duplicate native architecture receipt")
         result[architecture] = digest(receipt["digest"])
-    require(set(result) == set(ARCHITECTURES), "Incomplete native architecture receipts")
+    require(
+        set(result) == set(ARCHITECTURES), "Incomplete native architecture receipts"
+    )
     return result
 
 
 def validate_index(manifest: dict, receipts: dict[str, str]) -> None:
     """Require the published version index to contain only the two verified images."""
-    require(manifest.get("mediaType") in MANIFEST_TYPES[:2], "Published image is not an index")
+    require(
+        manifest.get("mediaType") in MANIFEST_TYPES[:2],
+        "Published image is not an index",
+    )
     descriptors = manifest.get("manifests", [])
     require(len(descriptors) == 2, "Published index must contain exactly two images")
     actual = {}
     for descriptor in descriptors:
         platform = descriptor.get("platform", {})
-        require(platform.get("os") == "linux", "Published index contains a non-Linux image")
+        require(
+            platform.get("os") == "linux", "Published index contains a non-Linux image"
+        )
         architecture = platform.get("architecture")
         require(architecture not in actual, "Published index repeats an architecture")
         actual[architecture] = digest(descriptor["digest"])
-    require(actual == receipts, "Published index does not match validated native receipts")
+    require(
+        actual == receipts, "Published index does not match validated native receipts"
+    )

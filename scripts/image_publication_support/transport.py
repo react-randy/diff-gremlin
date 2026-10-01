@@ -15,7 +15,9 @@ class PublicationRedirects(urllib.request.HTTPRedirectHandler):
         before = urllib.parse.urlsplit(req.full_url)
         after = urllib.parse.urlsplit(newurl)
         if after.scheme != "https" or after.netloc != before.netloc:
-            raise urllib.error.URLError("Publication metadata redirected outside its origin")
+            raise urllib.error.URLError(
+                "Publication metadata redirected outside its origin"
+            )
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
@@ -23,7 +25,9 @@ def http_json(url: str, headers: dict[str, str]) -> tuple[int, dict]:
     """Read bounded official metadata without including response bodies in errors."""
     request = urllib.request.Request(url, headers=headers)
     try:
-        response = urllib.request.build_opener(PublicationRedirects()).open(request, timeout=30)
+        response = urllib.request.build_opener(PublicationRedirects()).open(
+            request, timeout=30
+        )
     except urllib.error.HTTPError as error:
         response = error
     with response:
