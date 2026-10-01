@@ -15,6 +15,7 @@ def document() -> dict:
         "pyscn",
         "lizard",
         "gitleaks",
+        "shfmt",
         "node",
         "eslint",
         "tsc",
@@ -24,7 +25,8 @@ def document() -> dict:
     )
     return {
         "tools": {
-            tool: {"available": shutil.which(tool, path=search) is not None} for tool in tools
+            tool: {"available": shutil.which(tool, path=search) is not None}
+            for tool in tools
         },
         "guidance": [
             "Use the full Docker image for the bundled cross-language toolchain.",

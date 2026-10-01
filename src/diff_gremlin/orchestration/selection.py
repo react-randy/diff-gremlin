@@ -24,7 +24,9 @@ def python_capabilities() -> list[Capability]:
 
     return [
         Capability("python.lint.ruff", "Python lint", "lint", analyze_ruff),
-        Capability("python.types.pyrefly", "Python types", "types", analyze_python_types),
+        Capability(
+            "python.types.pyrefly", "Python types", "types", analyze_python_types
+        ),
         Capability(
             "python.health.pyscn",
             "Python health, clones and dead code",
@@ -55,7 +57,12 @@ def javascript_capabilities(languages: tuple[str, ...]) -> list[Capability]:
             "complexity",
             analyze_js_complexity,
         ),
-        Capability("javascript.lint.eslint", "JavaScript/TypeScript lint", "lint", analyze_js_lint),
+        Capability(
+            "javascript.lint.eslint",
+            "JavaScript/TypeScript lint",
+            "lint",
+            analyze_js_lint,
+        ),
         Capability(
             "javascript.duplication.jscpd",
             "JavaScript/TypeScript clones",
@@ -66,7 +73,9 @@ def javascript_capabilities(languages: tuple[str, ...]) -> list[Capability]:
     ]
     if "typescript" in languages:
         result.append(
-            Capability("typescript.types.tsc", "TypeScript types", "types", analyze_ts_types)
+            Capability(
+                "typescript.types.tsc", "TypeScript types", "types", analyze_ts_types
+            )
         )
     return result
 
@@ -76,8 +85,32 @@ def java_capabilities() -> list[Capability]:
     from diff_gremlin.analyzers.java.types import analyze_java_types
 
     return [
-        Capability("java.structure", "Java parser structure", "structure", analyze_java_structure),
+        Capability(
+            "java.structure",
+            "Java parser structure",
+            "structure",
+            analyze_java_structure,
+        ),
         Capability("java.types", "Standalone Java types", "types", analyze_java_types),
+    ]
+
+
+def shell_capabilities() -> list[Capability]:
+    from diff_gremlin.analyzers.shell import (
+        analyze_shell_complexity,
+        analyze_shell_syntax,
+    )
+
+    return [
+        Capability(
+            "shell.syntax.shfmt", "Shell syntax", "structure", analyze_shell_syntax
+        ),
+        Capability(
+            "complexity.shell",
+            "Shell function decisions",
+            "complexity",
+            analyze_shell_complexity,
+        ),
     ]
 
 
@@ -90,8 +123,12 @@ def builtin_capabilities() -> list[Capability]:
     return [
         Capability("hygiene", "Repository hygiene", "hygiene", analyze_hygiene),
         Capability("security.unicode", "Unicode controls", "security", analyze_unicode),
-        Capability("security.execution", "Execution calls", "security", analyze_execution),
-        Capability("security.secrets", "Potential secrets", "security", analyze_secrets),
+        Capability(
+            "security.execution", "Execution calls", "security", analyze_execution
+        ),
+        Capability(
+            "security.secrets", "Potential secrets", "security", analyze_secrets
+        ),
     ]
 
 
@@ -101,7 +138,12 @@ def capabilities(languages: tuple[str, ...]) -> list[Capability]:
     result = builtin_capabilities()
     if set(languages) - {"javascript", "typescript", "shell"}:
         result.append(
-            Capability("complexity.lizard", "Function complexity", "complexity", analyze_complexity)
+            Capability(
+                "complexity.lizard",
+                "Function complexity",
+                "complexity",
+                analyze_complexity,
+            )
         )
     if "python" in languages:
         result.extend(python_capabilities())
@@ -109,6 +151,8 @@ def capabilities(languages: tuple[str, ...]) -> list[Capability]:
         result.extend(javascript_capabilities(languages))
     if "java" in languages:
         result.extend(java_capabilities())
+    if "shell" in languages:
+        result.extend(shell_capabilities())
     return result
 
 

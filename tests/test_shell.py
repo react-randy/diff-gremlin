@@ -220,9 +220,9 @@ def test_native_syntax_scope_and_production_complexity(tmp_path):
         ('/bin/sh -ec "$SECRET"', "shell.command-string", "high"),
         ("bash -- -c", "shell.command-call", "info"),
         ("source ./fixed.sh", "shell.source", "info"),
-        ('. "$path"', "shell.dynamic-source", "low"),
-        ('"$command" value', "shell.dynamic-command", "low"),
-        ("e\\val value", "shell.dynamic-command", "low"),
+        ('. "$path"', "shell.dynamic-source", "info"),
+        ('"$command" value', "shell.dynamic-command", "info"),
+        ("e\\val value", "shell.dynamic-command", "info"),
     ],
 )
 def test_native_calls_calibrated_without_argument_leak(

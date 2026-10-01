@@ -13,7 +13,9 @@ MAX_JSON_BYTES = 8 * 1024 * 1024
 MAX_NODES = 20_000
 MAX_DEPTH = 128
 _SCHEMA = json.loads((Path(__file__).parent / "assets" / "schema.json").read_text())
-_OPERATORS = json.loads((Path(__file__).parent / "assets" / "operators.json").read_text())
+_OPERATORS = json.loads(
+    (Path(__file__).parent / "assets" / "operators.json").read_text()
+)
 _GROUPS = {
     "Command": {
         "CallExpr",
@@ -131,7 +133,7 @@ class Validator:
     def node(self, value: object, expected: str, depth: int) -> None:
         """Check a concrete node's fields and annotate its internal kind."""
         if not isinstance(value, dict):
-            raise ValueError("invalid AST node")
+            raise TypeError("invalid AST node")
         self.nodes += 1
         if self.nodes > MAX_NODES:
             raise ValueError("AST node limit exceeded")
@@ -140,7 +142,11 @@ class Validator:
         required = set(_REQUIRED.get(kind, ()))
         if kind not in _CONTAINERS and value != {"Type": "File"}:
             required.update(("Pos", "End"))
-        if not required.issubset(value) or set(value) - fields.keys() - {"Type", "Pos", "End"}:
+        if not required.issubset(value) or set(value) - fields.keys() - {
+            "Type",
+            "Pos",
+            "End",
+        }:
             raise ValueError("missing or unknown AST fields")
         self.fields(value, fields, depth)
         self.required_shape(value, kind)
@@ -183,7 +189,9 @@ class Validator:
         """Check every present field using the pinned descriptor table."""
         for key, item in value.items():
             if key != "Type":
-                self.value(item, "Pos" if key in {"Pos", "End"} else fields[key], depth + 1)
+                self.value(
+                    item, "Pos" if key in {"Pos", "End"} else fields[key], depth + 1
+                )
         if "Pos" in value and value["Pos"]["Offset"] > value["End"]["Offset"]:
             raise ValueError("reversed AST span")
 

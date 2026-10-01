@@ -41,7 +41,9 @@ SUPPORTED_SUFFIXES = frozenset(
 )
 
 
-def _complexity_metrics(functions: list[dict], is_limited: bool) -> tuple[dict, list[dict]]:
+def _complexity_metrics(
+    functions: list[dict], is_limited: bool
+) -> tuple[dict, list[dict]]:
     values = [row["cc"] for row in functions]
     hotspots = sorted(
         (row for row in functions if row["cc"] > 10),
@@ -54,7 +56,9 @@ def _complexity_metrics(functions: list[dict], is_limited: bool) -> tuple[dict, 
             average_cc=sum(values) / len(values) if values else 0.0,
         )
     declarations = [
-        row for row in functions if row.get("origin") == "python-ast-ellipsis-declaration"
+        row
+        for row in functions
+        if row.get("origin") == "python-ast-ellipsis-declaration"
     ]
     if declarations:
         metrics["declarations"] = declarations
@@ -76,9 +80,19 @@ def _hotspot_findings(hotspots: list[dict]) -> list[Finding]:
     return findings
 
 
+def _coverage_reason(is_limited: bool, metrics: dict) -> str:
+    if is_limited:
+        return "Lizard may omit valid Scala function declarations; function coverage is incomplete"
+    if metrics.get("declarations"):
+        return "Python ellipsis declarations omitted by Lizard are accounted for with AST, named locations and branch-free complexity 1"
+    return ""
+
+
 def analyze_complexity(ctx: ScanContext) -> StageResult:
     files = tuple(
-        file for file in ctx.production_files if file.path.suffix.lower() in SUPPORTED_SUFFIXES
+        file
+        for file in ctx.production_files
+        if file.path.suffix.lower() in SUPPORTED_SUFFIXES
     )
     failure = partial(
         unavailable,
@@ -89,7 +103,9 @@ def analyze_complexity(ctx: ScanContext) -> StageResult:
         eligible_files=len(files),
     )
     if not files:
-        return failure(reason="No production files supported by Lizard", status="unsupported")
+        return failure(
+            reason="No production files supported by Lizard", status="unsupported"
+        )
     result = ctx.run(
         [
             "lizard",
@@ -104,7 +120,9 @@ def analyze_complexity(ctx: ScanContext) -> StageResult:
     )
     status = execution_status(result, (0,))
     if status is not None:
-        return failure(reason="Lizard execution did not complete valid analysis", status=status)
+        return failure(
+            reason="Lizard execution did not complete valid analysis", status=status
+        )
     try:
         functions = observations(ctx, files, result.stdout)
     except (
@@ -117,7 +135,9 @@ def analyze_complexity(ctx: ScanContext) -> StageResult:
         SyntaxError,
         RecursionError,
     ):
-        return failure(reason="Lizard output failed schema or coverage validation", status="failed")
+        return failure(
+            reason="Lizard output failed schema or coverage validation", status="failed"
+        )
     is_limited = any(file.path.suffix.lower() == ".scala" for file in files)
     metrics, hotspots = _complexity_metrics(functions, is_limited)
     return StageResult(
@@ -129,11 +149,7 @@ def analyze_complexity(ctx: ScanContext) -> StageResult:
         version=tool_version(ctx, "lizard"),
         metrics=metrics,
         findings=_hotspot_findings(hotspots),
-        reason="Lizard may omit valid Scala function declarations; function coverage is incomplete"
-        if is_limited
-        else "Python ellipsis declarations omitted by Lizard are accounted for with AST, named locations and branch-free complexity 1"
-        if metrics.get("declarations")
-        else "",
+        reason=_coverage_reason(is_limited, metrics),
         analyzed_files=len(files),
         eligible_files=len(files),
         duration_seconds=result.duration_seconds,
