@@ -1,0 +1,48 @@
+[build-system]
+requires = ["uv_build==0.12.18"]
+build-backend = "uv_build"
+
+[project]
+name = "diff-gremlin"
+version = "1.0.0"
+description = "Static risk checks for repos and pull requests. Findings, coverage, and receipts."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{name = "Randy"}]
+dependencies = ["ruff==0.16.8", "pyrefly==1.3.0", "lizard==1.24.0", "radon==6.0.1"]
+
+[project.optional-dependencies]
+full = ["pyscn==1.32.1"]
+
+[project.urls]
+Homepage = "https://github.com/react-randy/diff-gremlin"
+Issues = "https://github.com/react-randy/diff-gremlin/issues"
+Source = "https://github.com/react-randy/diff-gremlin"
+
+[project.scripts]
+diff-gremlin = "diff_gremlin.cli.main:main"
+vibe-check = "diff_gremlin.cli.main:main"
+
+[dependency-groups]
+dev = ["pytest==9.1.1"]
+
+[tool.uv]
+exclude-newer = "2026-09-24T00:00:00Z"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I", "UP", "B", "SIM", "FLY", "C4", "RUF"]
+
+[tool.pyrefly]
+project-includes = ["src/**/*.py"]
+search-path = ["src"]
+python-version = "3.12"

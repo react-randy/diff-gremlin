@@ -5,12 +5,18 @@ from typing import Literal
 
 from diff_gremlin.domain.findings import Finding
 
-StageStatus = Literal[
-    "ok", "limited", "missing", "failed", "timeout", "unsupported", "skipped"
-]
+StageStatus = Literal["ok", "limited", "missing", "failed", "timeout", "unsupported", "skipped"]
 Category = Literal[
-    "lint", "types", "complexity", "duplication", "security", "hygiene",
-    "health", "maintainability", "history", "structure",
+    "lint",
+    "types",
+    "complexity",
+    "duplication",
+    "security",
+    "hygiene",
+    "health",
+    "maintainability",
+    "history",
+    "structure",
 ]
 
 
