@@ -1,0 +1,295 @@
+{
+  "ArithmCmd": {
+    "Left": "Pos",
+    "Right": "Pos",
+    "Unsigned": "bool",
+    "X": "ArithmExpr"
+  },
+  "ArithmExp": {
+    "Bracket": "bool",
+    "Left": "Pos",
+    "Right": "Pos",
+    "Unsigned": "bool",
+    "X": "ArithmExpr"
+  },
+  "ArrayElem": {
+    "Comments": "[]Comment",
+    "Index": "ArithmExpr",
+    "Value": "*Word"
+  },
+  "ArrayExpr": {
+    "Elems": "[]*ArrayElem",
+    "Last": "[]Comment",
+    "Lparen": "Pos",
+    "Rparen": "Pos"
+  },
+  "Assign": {
+    "Append": "bool",
+    "Array": "*ArrayExpr",
+    "Index": "ArithmExpr",
+    "Naked": "bool",
+    "Name": "*Lit",
+    "Value": "*Word"
+  },
+  "BinaryArithm": {
+    "Op": "BinAritOperator",
+    "OpPos": "Pos",
+    "X": "ArithmExpr",
+    "Y": "ArithmExpr"
+  },
+  "BinaryCmd": {
+    "Op": "BinCmdOperator",
+    "OpPos": "Pos",
+    "X": "*Stmt",
+    "Y": "*Stmt"
+  },
+  "BinaryTest": {
+    "Op": "BinTestOperator",
+    "OpPos": "Pos",
+    "X": "TestExpr",
+    "Y": "TestExpr"
+  },
+  "Block": {
+    "Last": "[]Comment",
+    "Lbrace": "Pos",
+    "Rbrace": "Pos",
+    "Stmts": "[]*Stmt"
+  },
+  "BraceExp": {
+    "Elems": "[]*Word",
+    "Sequence": "bool"
+  },
+  "CStyleLoop": {
+    "Cond": "ArithmExpr",
+    "Init": "ArithmExpr",
+    "Lparen": "Pos",
+    "Post": "ArithmExpr",
+    "Rparen": "Pos"
+  },
+  "CallExpr": {
+    "Args": "[]*Word",
+    "Assigns": "[]*Assign"
+  },
+  "CaseClause": {
+    "Braces": "bool",
+    "Case": "Pos",
+    "Esac": "Pos",
+    "In": "Pos",
+    "Items": "[]*CaseItem",
+    "Last": "[]Comment",
+    "Word": "*Word"
+  },
+  "CaseItem": {
+    "Comments": "[]Comment",
+    "Last": "[]Comment",
+    "Op": "CaseOperator",
+    "OpPos": "Pos",
+    "Patterns": "[]*Word",
+    "Stmts": "[]*Stmt"
+  },
+  "CmdSubst": {
+    "Backquotes": "bool",
+    "Last": "[]Comment",
+    "Left": "Pos",
+    "ReplyVar": "bool",
+    "Right": "Pos",
+    "Stmts": "[]*Stmt",
+    "TempFile": "bool"
+  },
+  "Comment": {
+    "Hash": "Pos",
+    "Text": "string"
+  },
+  "CoprocClause": {
+    "Coproc": "Pos",
+    "Name": "*Word",
+    "Stmt": "*Stmt"
+  },
+  "DblQuoted": {
+    "Dollar": "bool",
+    "Left": "Pos",
+    "Parts": "[]WordPart",
+    "Right": "Pos"
+  },
+  "DeclClause": {
+    "Args": "[]*Assign",
+    "Variant": "*Lit"
+  },
+  "Expansion": {
+    "Op": "ParExpOperator",
+    "Word": "*Word"
+  },
+  "ExtGlob": {
+    "Op": "GlobOperator",
+    "OpPos": "Pos",
+    "Pattern": "*Lit"
+  },
+  "File": {
+    "Last": "[]Comment",
+    "Name": "string",
+    "Stmts": "[]*Stmt"
+  },
+  "FlagsArithm": {
+    "Flags": "*Lit",
+    "X": "ArithmExpr"
+  },
+  "ForClause": {
+    "Braces": "bool",
+    "Do": "[]*Stmt",
+    "DoLast": "[]Comment",
+    "DoPos": "Pos",
+    "DonePos": "Pos",
+    "ForPos": "Pos",
+    "Loop": "Loop",
+    "Select": "bool"
+  },
+  "FuncDecl": {
+    "Body": "*Stmt",
+    "Name": "*Lit",
+    "Names": "[]*Lit",
+    "Parens": "bool",
+    "Position": "Pos",
+    "RsrvWord": "bool"
+  },
+  "IfClause": {
+    "Cond": "[]*Stmt",
+    "CondLast": "[]Comment",
+    "Else": "*IfClause",
+    "FiPos": "Pos",
+    "Last": "[]Comment",
+    "Position": "Pos",
+    "Then": "[]*Stmt",
+    "ThenLast": "[]Comment",
+    "ThenPos": "Pos"
+  },
+  "LetClause": {
+    "Exprs": "[]ArithmExpr",
+    "Let": "Pos"
+  },
+  "Lit": {
+    "Value": "string",
+    "ValueEnd": "Pos",
+    "ValuePos": "Pos"
+  },
+  "ParamExp": {
+    "Dollar": "Pos",
+    "Excl": "bool",
+    "Exp": "*Expansion",
+    "Flags": "*Lit",
+    "GlobSubst": "OptState",
+    "Index": "ArithmExpr",
+    "IsSet": "bool",
+    "Length": "bool",
+    "Modifiers": "[]*Lit",
+    "Names": "ParNamesOperator",
+    "NestedParam": "WordPart",
+    "Param": "*Lit",
+    "Rbrace": "Pos",
+    "RcExpand": "OptState",
+    "Repl": "*Replace",
+    "Short": "bool",
+    "Slice": "*Slice",
+    "Split": "OptState",
+    "Width": "bool"
+  },
+  "ParenArithm": {
+    "Lparen": "Pos",
+    "Rparen": "Pos",
+    "X": "ArithmExpr"
+  },
+  "ParenTest": {
+    "Lparen": "Pos",
+    "Rparen": "Pos",
+    "X": "TestExpr"
+  },
+  "ProcSubst": {
+    "Last": "[]Comment",
+    "Op": "ProcOperator",
+    "OpPos": "Pos",
+    "Rparen": "Pos",
+    "Stmts": "[]*Stmt"
+  },
+  "Redirect": {
+    "Hdoc": "*Word",
+    "N": "*Lit",
+    "Op": "RedirOperator",
+    "OpPos": "Pos",
+    "Word": "*Word"
+  },
+  "Replace": {
+    "All": "bool",
+    "Orig": "*Word",
+    "With": "*Word"
+  },
+  "SglQuoted": {
+    "Dollar": "bool",
+    "Left": "Pos",
+    "Right": "Pos",
+    "Value": "string"
+  },
+  "Slice": {
+    "Length": "ArithmExpr",
+    "Offset": "ArithmExpr"
+  },
+  "Stmt": {
+    "Background": "bool",
+    "Cmd": "Command",
+    "Comments": "[]Comment",
+    "Coprocess": "bool",
+    "Disown": "bool",
+    "Negated": "bool",
+    "Position": "Pos",
+    "Redirs": "[]*Redirect",
+    "Semicolon": "Pos"
+  },
+  "Subshell": {
+    "Last": "[]Comment",
+    "Lparen": "Pos",
+    "Rparen": "Pos",
+    "Stmts": "[]*Stmt"
+  },
+  "TestClause": {
+    "Left": "Pos",
+    "Right": "Pos",
+    "X": "TestExpr"
+  },
+  "TestDecl": {
+    "Body": "*Stmt",
+    "Description": "*Word",
+    "Position": "Pos"
+  },
+  "TimeClause": {
+    "PosixFormat": "bool",
+    "Stmt": "*Stmt",
+    "Time": "Pos"
+  },
+  "UnaryArithm": {
+    "Op": "UnAritOperator",
+    "OpPos": "Pos",
+    "Post": "bool",
+    "X": "ArithmExpr"
+  },
+  "UnaryTest": {
+    "Op": "UnTestOperator",
+    "OpPos": "Pos",
+    "X": "TestExpr"
+  },
+  "WhileClause": {
+    "Cond": "[]*Stmt",
+    "CondLast": "[]Comment",
+    "Do": "[]*Stmt",
+    "DoLast": "[]Comment",
+    "DoPos": "Pos",
+    "DonePos": "Pos",
+    "Until": "bool",
+    "WhilePos": "Pos"
+  },
+  "Word": {
+    "Parts": "[]WordPart"
+  },
+  "WordIter": {
+    "InPos": "Pos",
+    "Items": "[]*Word",
+    "Name": "*Lit"
+  }
+}

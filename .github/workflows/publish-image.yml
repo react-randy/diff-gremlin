@@ -1,0 +1,179 @@
+name: Publish validated native container images
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published stable release tag (v1.0.0)
+        required: true
+        type: string
+        default: v1.0.0
+
+# Serialize this repository's version-tag writers, including re-runs.
+concurrency:
+  group: diff-gremlin-image-publication
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  identity:
+    if: >-
+      github.repository == 'react-randy/diff-gremlin' &&
+      github.repository_id == '1400500531' &&
+      ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.tag == 'v1.0.0') ||
+       (github.event_name == 'release' && github.event.action == 'published' &&
+        github.ref == 'refs/tags/v1.0.0' && github.event.release.tag_name == 'v1.0.0' &&
+        !github.event.release.draft && !github.event.release.prerelease))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      sha: ${{ steps.identity.outputs.sha }}
+      release_id: ${{ steps.identity.outputs.release_id }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0, 2026-07-20
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Verify live repository, release, tag and main identities
+        id: identity
+        run: python3 -m scripts.image_publication guard
+
+  native:
+    needs: identity
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - architecture: amd64
+            runner: ubuntu-24.04
+          - architecture: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    env:
+      SOURCE_SHA: ${{ needs.identity.outputs.sha }}
+      RELEASE_ID: ${{ needs.identity.outputs.release_id }}
+      ARCHITECTURE: ${{ matrix.architecture }}
+      IMAGE: ghcr.io/react-randy/diff-gremlin
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0, 2026-07-20
+        with:
+          ref: ${{ needs.identity.outputs.sha }}
+          persist-credentials: false
+      - name: Recheck live source identity
+        run: python3 -m scripts.image_publication guard --sha "$SOURCE_SHA" --release-id "$RELEASE_ID"
+      - name: Build the complete image on its native architecture
+        run: |
+          docker build --platform "linux/$ARCHITECTURE" --tag diff-gremlin:publication \
+            --label "org.opencontainers.image.source=https://github.com/react-randy/diff-gremlin" \
+            --label "org.opencontainers.image.revision=$SOURCE_SHA" \
+            --label "org.opencontainers.image.version=1.0.0" .
+          test "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' diff-gremlin:publication)" = "linux/$ARCHITECTURE"
+      - name: Exercise the shipped Docker controls before registry authentication
+        run: python3 scripts/verify_docker.py diff-gremlin:publication
+      - name: Authenticate to GHCR using an isolated Docker config
+        env:
+          GHCR_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+        run: |
+          export DOCKER_CONFIG="$RUNNER_TEMP/publication-docker"
+          printf 'DOCKER_CONFIG=%s\n' "$DOCKER_CONFIG" >> "$GITHUB_ENV"
+          install -d -m 700 "$DOCKER_CONFIG"
+          printf '%s' "$GHCR_PASSWORD" | docker login ghcr.io --username "$GHCR_USER" --password-stdin
+      - name: Publish the validated native image under a unique staging tag
+        run: |
+          python3 -m scripts.image_publication guard --sha "$SOURCE_SHA" --release-id "$RELEASE_ID"
+          staging="$IMAGE:sha-$SOURCE_SHA-$ARCHITECTURE-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          docker tag diff-gremlin:publication "$staging"
+          docker push "$staging"
+          docker image inspect --format '{{json .RepoDigests}}' "$staging" | \
+            python3 -m scripts.image_publication receipt --sha "$SOURCE_SHA" \
+              --architecture "$ARCHITECTURE" --platform "linux/$ARCHITECTURE" \
+              --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" \
+              --output "$RUNNER_TEMP/receipt/receipt.json"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2, 2025-03-19
+        with:
+          name: native-image-${{ matrix.architecture }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/receipt/receipt.json
+          if-no-files-found: error
+          retention-days: 2
+      - name: Remove registry credentials
+        if: always()
+        run: |
+          export DOCKER_CONFIG="$RUNNER_TEMP/publication-docker"
+          trap 'rm -f "$DOCKER_CONFIG/config.json"' EXIT
+          docker logout ghcr.io
+
+  index:
+    needs: [identity, native]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    env:
+      SOURCE_SHA: ${{ needs.identity.outputs.sha }}
+      RELEASE_ID: ${{ needs.identity.outputs.release_id }}
+      IMAGE: ghcr.io/react-randy/diff-gremlin
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0, 2026-07-20
+        with:
+          ref: ${{ needs.identity.outputs.sha }}
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0, 2025-04-24
+        with:
+          name: native-image-amd64-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/receipts/amd64
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0, 2025-04-24
+        with:
+          name: native-image-arm64-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/receipts/arm64
+      - name: Validate both current-run receipts
+        run: |
+          python3 -m scripts.image_publication sources --sha "$SOURCE_SHA" \
+            --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" \
+            --receipts "$RUNNER_TEMP/receipts" > "$RUNNER_TEMP/image-sources"
+      - name: Authenticate to GHCR using an isolated Docker config
+        env:
+          GHCR_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_USER: ${{ github.actor }}
+        run: |
+          export DOCKER_CONFIG="$RUNNER_TEMP/publication-docker"
+          printf 'DOCKER_CONFIG=%s\n' "$DOCKER_CONFIG" >> "$GITHUB_ENV"
+          install -d -m 700 "$DOCKER_CONFIG"
+          printf '%s' "$GHCR_PASSWORD" | docker login ghcr.io --username "$GHCR_USER" --password-stdin
+      - name: Publish the version index after both native Docker controls pass
+        run: |
+          python3 -m scripts.image_publication guard --sha "$SOURCE_SHA" --release-id "$RELEASE_ID"
+          python3 -m scripts.image_publication absent --docker-config "$DOCKER_CONFIG"
+          mapfile -t sources < "$RUNNER_TEMP/image-sources"
+          docker buildx imagetools create --tag "$IMAGE:1.0.0" "${sources[@]}"
+          docker buildx imagetools inspect --raw "$IMAGE:1.0.0" | \
+            python3 -m scripts.image_publication index --sha "$SOURCE_SHA" \
+              --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" \
+              --receipts "$RUNNER_TEMP/receipts"
+          docker buildx imagetools inspect "$IMAGE:1.0.0"
+      - name: Record public-visibility handoff
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'SUMMARY'
+          Published the verified amd64/arm64 index as `ghcr.io/react-randy/diff-gremlin:1.0.0`.
+
+          GHCR makes new packages private. The package owner must set this package's visibility to public, then verify anonymous pulls and the index digest before advertising the Docker command.
+          SUMMARY
+      - name: Remove registry credentials
+        if: always()
+        run: |
+          export DOCKER_CONFIG="$RUNNER_TEMP/publication-docker"
+          trap 'rm -f "$DOCKER_CONFIG/config.json"' EXIT
+          docker logout ghcr.io

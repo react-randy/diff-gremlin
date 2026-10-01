@@ -1,0 +1,66 @@
+name: Validate package and full Docker delivery
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
+        with:
+          version: '0.12.18'
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: '22.23.1'
+      - name: Install reviewed Node analyzers without lifecycle scripts
+        run: |
+          npm --prefix toolchain/node ci --ignore-scripts --no-audit --no-fund
+          echo "$PWD/toolchain/node/node_modules/.bin" >> "$GITHUB_PATH"
+          echo "DIFF_GREMLIN_TOOL_PATH=$PWD/toolchain/node/node_modules/.bin:$(dirname "$(command -v node)"):$JAVA_HOME/bin" >> "$GITHUB_ENV"
+      - name: Install locked development wheels
+        run: uv sync --locked --extra full --no-install-project --no-build --python 3.12.12
+      - name: Install verified Gitleaks into the private tool environment
+        run: uv run --no-sync python scripts/provision_gitleaks.py .venv/bin
+      - name: Install verified shfmt into the private tool environment
+        run: uv run --no-sync python scripts/provision_shfmt.py .venv/bin
+      - name: Check source and tests
+        env:
+          PYTHONPATH: src
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
+        run: |
+          uv run --no-sync ruff check .
+          uv run --no-sync pyrefly check
+          uv run --no-sync pytest
+          sh -n install.sh
+      - name: Build package with verified backend
+        run: uv build --wheel --require-hashes --build-constraints toolchain/python/build-requirements.txt
+      - name: Verify shipped assets and stage release preview
+        run: python3 scripts/prepare_release.py dist/diff_gremlin-1.0.0-py3-none-any.whl --out "$RUNNER_TEMP/release"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: diff-gremlin-release-preview
+          path: ${{ runner.temp }}/release/*
+          if-no-files-found: error
+  docker:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-24.04, ubuntu-24.04-arm]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      - name: Build complete image
+        run: docker build --tag diff-gremlin:ci .
+      - name: Exercise installed analyzers with a read-only source mount
+        run: python3 scripts/verify_docker.py diff-gremlin:ci

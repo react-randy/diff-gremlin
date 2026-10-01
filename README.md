@@ -1,170 +1,122 @@
-# vibe-check
+# Diff Gremlin
 
-Detect AI slop and vibe-coded garbage before it hits your codebase.
+**Small gremlin. Big trust issues.**
 
-## Why
+A quick slop check for pull requests. A second opinion before you adopt a repo.
+Static findings, clear coverage, and JSON receipts.
 
-AI code generation tools produce code that looks clean on the surface but carries structural debt underneath — loose types, copy-pasted functions, high complexity hidden behind formatted code. `vibe-check` runs 10 static analysis tools and produces a single grade (A-F) so you can tell at a glance whether a repo or PR is solid or vibe-coded.
+Built for the [GPT-6.1 Sol](https://developers.openai.com/api/docs/models/gpt-6.1-sol)
+and [Opus 5.5](https://www.anthropic.com/claude-opus-5-5) era: generated code still owes
+you evidence. No model or API key required. It cannot guess who wrote your code.
 
-## When to use
+## Install
 
-- **Before depending on a repo**: Clone it, grade it. F means walk away.
-- **Reviewing a PR**: Run on the PR branch, compare to base. Did quality improve or degrade?
-- **CI gate**: Block merges that drop the grade below a threshold.
-- **Auditing your own code**: If your tool gives you an F, fix it before shipping.
+The v1.0.0 installer and container commands below require the published release.
+During release preparation, use the [source installation](docs/installation.md#from-source).
 
-## Usage
-
-### Docker (recommended for analysis tools)
-
-```bash
-docker build -t vibe-check .
-
-# Grade a repo
-docker run --rm vibe-check https://github.com/org/repo
-
-# Grade a local repo (mount it)
-docker run --rm -v /path/to/repo:/workspace vibe-check /workspace
-
-# Recommended for Java repos so compiled artifacts are not written as root
-docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
-  -v /path/to/repo:/workspace \
-  -v vibe-check-maven-cache:/tmp/.m2 \
-  -v vibe-check-gradle-cache:/tmp/.gradle \
-  vibe-check /workspace
+```sh
+curl -fsSL https://github.com/react-randy/diff-gremlin/releases/download/v1.0.0/install.sh | sh
+diff-gremlin doctor
 ```
 
-The Docker image includes the analysis toolchain, including OpenJDK 25 and
-Maven for Java compile checks. Gradle projects are supported when they commit a
-Gradle wrapper (`gradlew`); bare Gradle projects should add a wrapper or use a
-custom image with a modern Gradle installation. Provider CLIs and their
-credentials (`gh` for GitHub, `glab` for GitLab) are normally host-local, so use
-the local CLI for automatic PR/MR URL resolution unless you build an image that
-also contains those CLIs and credentials.
+The installer verifies the release wheel and dependency hashes, uses an isolated
+uv tool environment, and adds Gitleaks and shfmt. Python full checks include PyScn where its
+platform wheel is available. It does not install Node or Java. See [platform support,
+manual installation, and uninstall](docs/installation.md).
 
-### Reviewing a PR or MR
+**Full toolchain, one command:** Python, TypeScript/JavaScript, Java, Shell, and secrets.
 
-```bash
-# Automatic — pass a GitHub PR URL (requires host gh CLI/auth)
-python vibe_check.py --pr https://github.com/org/repo/pull/123
-
-# Automatic — pass a GitLab MR URL (requires host glab CLI/auth)
-python vibe_check.py --pr https://gitlab.example.com/group/repo/-/merge_requests/123
-
-# Manual — specify base and head refs
-docker run --rm vibe-check --compare main...feature-branch https://github.com/org/repo
-
-# Local repo comparison
-docker run --rm -v $(pwd):/workspace vibe-check --compare main...feature-branch /workspace
+```sh
+docker run --rm ghcr.io/react-randy/diff-gremlin:1.0.0 pr https://github.com/OWNER/REPO/pull/123
 ```
 
-PR/MR mode resolves the provider refs, checks out both refs, runs full analysis on each, and outputs a delta report:
+For local code, mount the repo read-only:
 
-```
-# vibe-check: PR Delta — repo-name
-Base: main (abc123) | Head: feature-branch (def456)
-Overall: B (80) → C (65) ▼ (-15)
-
-## Dimension Changes
-| Dimension | Base | Head | Delta |
-|-----------|------|------|-------|
-| Linting | A (95) | C (62) | -33 ▼ |
-| Complexity | B (80) | B (78) | -2 ▼ |
-
-## New Risk Flags
-- High lint issue count (47) [NEW]
+```sh
+docker run --rm --read-only --cap-drop=ALL --security-opt=no-new-privileges \
+  --network=none --tmpfs /tmp:rw,nosuid,nodev,size=1g \
+  --mount "type=bind,src=$PWD,dst=/workspace,readonly" \
+  ghcr.io/react-randy/diff-gremlin:1.0.0 check /workspace
 ```
 
-### Private repos
+## Review a change
 
-Pass a GitHub token for private GitHub clone access:
-
-```bash
-export GH_TOKEN=...
-docker run --rm -e GH_TOKEN vibe-check https://github.com/org/private-repo
+```sh
+diff-gremlin pr https://github.com/OWNER/REPO/pull/123
+diff-gremlin pr https://gitlab.com/GROUP/REPO/-/merge_requests/123 --profile full
+diff-gremlin compare . main HEAD --format markdown
 ```
 
-For private GitLab MRs, the local CLI can reuse `glab` credentials without
-putting a token in the Git remote URL:
+PR/MR checks default to **quick**: PyScn health/clones/dead code, maintainability,
+JavaScript clones, and history are visibly omitted. Repo checks default to **full**.
+Quick results describe their selected checks. They are not a full assessment.
+Reviews compare exact pinned provider base/head commits; this is not a simulated merge.
 
-```bash
-glab auth status --hostname gitlab.example.com
-python vibe_check.py --pr https://gitlab.example.com/group/repo/-/merge_requests/42
+Read added findings, changed signals, and coverage before deciding what to review
+or fix. Removed findings are only reported as resolved when both relevant checks
+completed. [Usage and private repositories →](docs/usage.md)
+
+## Evaluate a repository
+
+```sh
+diff-gremlin check https://github.com/OWNER/REPO
+diff-gremlin check . --ref HEAD
+diff-gremlin check . --format json > receipt.json
 ```
 
-In Docker, clone/fetch the private repo on the host and mount it for manual
-comparison:
+A local check reads current files, including uncommitted work. `--ref` selects a
+Git snapshot. The receipt records source identity, profile, policy version, tools,
+findings, and missing evidence. Share the receipt alongside your adoption review;
+then inspect dependencies, tests, and project ownership yourself.
 
-```bash
-git clone https://gitlab.example.com/group/repo.git repo
-cd repo
-git fetch origin main feature-branch
-docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
-  -v "$PWD":/workspace \
-  -v vibe-check-maven-cache:/tmp/.m2 \
-  -v vibe-check-gradle-cache:/tmp/.gradle \
-  vibe-check --compare origin/main...origin/feature-branch /workspace
+## Read the verdict
+
+| Result | Your next move |
+| --- | --- |
+| **Hold** | Stop the merge or adoption. Inspect the named blockers. |
+| **Review** | Start with the located findings and changed signals. |
+| **Unknown** | Fill the listed evidence gaps before treating the score as usable. |
+| **No configured blockers** | Continue your review of tests, dependencies, and maintainers. |
+
+The gremlin brings receipts. You keep the merge button.
+
+## Make CI decisions explicit
+
+```sh
+diff-gremlin check . --fail-under 80 --fail-on high --require-complete --format json > receipt.json
 ```
 
-### Local (partial — only runs tools you have installed)
+| Exit | Meaning |
+| --- | --- |
+| `0` | Complete selected evidence; configured gates passed |
+| `1` | Known blocker or configured gate failed |
+| `2` | Usage, acquisition, or operational error |
+| `3` | Required evidence incomplete |
 
-```bash
-python vibe_check.py https://github.com/org/repo
-python vibe_check.py /path/to/local/repo
-python vibe_check.py --pr https://github.com/org/repo/pull/123
-python vibe_check.py --compare main...feature-branch /path/to/local/repo
-```
+A missing, failed, limited, unsupported, skipped, or timed-out required check makes
+the headline score **unknown**. It cannot become a passing number. Known blockers
+remain visible. Scores use a [versioned policy](docs/score-policy.md), with independent
+clean and deliberately bad controls. A score is an observation, not a security or
+correctness certificate. It cannot tell you who wrote the code.
 
-Missing tools are skipped gracefully. Docker is the intended workflow — all tools are pre-installed in the image.
+## What gets checked
 
-## What it runs
+Python uses Ruff, Pyrefly, Lizard, Radon, and optional PyScn. JavaScript/TypeScript
+uses ESLint lint and function complexity, TypeScript, and jscpd. Java uses JDK
+parser/type controls and Lizard. Shell uses shfmt for declared dialect syntax,
+function decisions, and command observations. Gitleaks and contextual source checks provide located security findings;
+repository hygiene and bounded Python Git history add context. Mixed repositories
+retain separate analyzer identities. [Exact tools and limits →](docs/toolchain.md)
 
-| Stage | Python tool | TypeScript tool | Java tool | What it measures |
-|-------|-------------|-----------------|-----------|------------------|
-| Lint | ruff | eslint | — | Style and correctness issues |
-| Types | pyright | tsc --noEmit | Maven/Gradle compile | Type/compile errors |
-| Complexity | lizard + radon | lizard | lizard | Cyclomatic complexity, maintainability index where available |
-| Health | pyscn | — | built-in Java structure scan | Codebase health, structure, high-risk constructs |
-| Duplication | pyscn (APTED) | jscpd | — | Structural code duplication |
-| Hidden Code | built-in | built-in | built-in | Invisible Unicode plus dynamic execution sinks |
-| Hygiene | built-in | built-in | built-in | License, tests, README, .gitignore, secrets |
-| History | wily | — | — | Complexity trends over git history |
+Scanning reads disposable snapshots. It never runs target builds, tests, wrappers,
+plugins, lifecycle scripts, or dependency installation. Local uv environments
+isolate dependencies; they are not an operating-system sandbox. Use the restricted
+Docker invocation above for an additional boundary. External imports and unsupported
+syntax can limit static type evidence; the report says so.
 
-Language is auto-detected from project markers (`pyproject.toml`, `tsconfig.json`, `package.json`, `pom.xml`, Gradle files, `src/main/java`, and file extensions). Mixed-language repos run every matching toolchain. Java analysis is honest about tool availability: `jdtls` is reported when unavailable, and Maven/Gradle compile is used as the semantic fallback.
+[Install](docs/installation.md) · [Usage](docs/usage.md) ·
+[Develop](docs/development.md) · [Architecture](docs/architecture.md) ·
+[Migration](docs/migration.md)
 
-### Beyond Python and TypeScript
-
-Lizard supports complexity analysis for many languages: **Rust, C, C++, Java, Go, Ruby, Swift, Objective-C, Scala, Lua**, and others. For repos in these languages, vibe-check still produces useful results -- complexity hotspots, hygiene checks, hidden-code detection, and duplication detection where a language-specific tool exists. Unsupported lint/type stages are skipped as `?`, not treated as clean passes or real failures.
-
-This means vibe-check can grade any repo, not just Python/TypeScript. The complexity and hygiene dimensions alone catch god-functions, missing licenses, and hardcoded secrets regardless of language.
-
-## Grading
-
-Each dimension gets a letter grade (A-F). Overall grade is a weighted average:
-
-| Dimension | Weight |
-|-----------|--------|
-| Health | 25% |
-| Complexity | 25% |
-| Hygiene | 15% |
-| Duplication | 15% |
-| Linting | 10% |
-| Type Safety | 10% |
-
-### Auto-F triggers
-
-Any of these force the overall grade to F regardless of other scores:
-
-- No license file (legal risk)
-- Potential hardcoded secrets detected
-- Invisible Unicode plus an execution sink in the same file
-- Any function with cyclomatic complexity > 50
-- Code duplication > 60%
-
-## Output
-
-Markdown report to stdout: summary table, auto-F triggers, risk flags, complexity hotspots (file + function + CC), duplication findings, and a recommendation per grade.
-
-## License
-
-MIT License. See [LICENSE](LICENSE).
+MIT. Derived from [nexus-marbell/vibe-check](https://github.com/nexus-marbell/vibe-check/tree/170bd72b96546a8f206ce907d807e61447df1535);
+original Marbell AG attribution is preserved in [LICENSE](LICENSE).

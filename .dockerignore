@@ -1,0 +1,15 @@
+.git
+.gitnexus
+.github
+.venv
+.pytest_cache
+.ruff_cache
+__pycache__
+*.pyc
+dist
+node_modules
+tests
+docs
+install.sh
+vibe_check.py
+.eslintrc.json
