@@ -9,13 +9,15 @@ The package needs no model API or model-specific configuration.
 | Python lint | Ruff 0.16.8 | Located diagnostics under scanner-owned settings |
 | Python types | Pyrefly 1.3.0 | Isolated static type checks; uninstalled external imports can limit evidence |
 | Python health/clones/dead code | PyScn 1.32.1 | Validated stdout JSON; optional platform wheel; full profile only |
-| Complexity | Lizard 1.24.0 | Function complexity for recognized syntax; parser limits remain visible |
+| Python and other recognized language complexity | Lizard 1.24.0 | One observation per production function; Python AST accounts for branch-free ellipsis declarations; parser limits remain visible |
+| JavaScript/TypeScript complexity | ESLint 10.11.0 | Native classic function and class initializer/static-block code paths, with independent coverage counts |
 | Python maintainability | Radon 6.0.1 | Informational MI from the shipped driver; full profile only |
 | JavaScript/TypeScript lint | ESLint 10.11.0 | Scanner-owned ESLint configuration and trusted parser/plugin packages |
 | TypeScript types | TypeScript 6.0.3 | Controlled compiler host/config; unresolved target dependencies limit evidence |
 | JavaScript/TypeScript clones | jscpd 4.2.3 | Scanner-owned options; full profile only |
 | Java structure/types | Temurin JDK 25.0.4.1+1 in Docker | Actual JDK parser; standalone `javac -proc:none`, empty dependency paths; missing external classes limit types |
 | Potential secrets | Gitleaks 8.30.1 | Pinned shipped rules, redacted JSON, target suppressions disabled; current inventoried text, not all Git history |
+| Shell syntax/complexity | shfmt 3.14.1 | Declared POSIX sh/dash, Bash and mksh; bounded validated AST; function decision estimate v1 |
 | Contextual security | Shipped source checks | Located Unicode/execution observations; no blanket penalty for ordinary subprocess use |
 | Hygiene | Shipped inventory checks | License, README, observed test files, gitignore; presence does not prove quality |
 | Python history | Shipped bounded Git/AST checks | Informational complexity samples at immutable revisions; full profile only |
@@ -24,6 +26,46 @@ Mixed repositories retain distinct stage IDs. Unsupported languages can receive
 applicable inventory/security/hygiene evidence; this is not a full lint/type check
 for every language. Required gaps make the score unknown. A shipped binary's
 availability does not prove that a target's imports or syntax can be fully analyzed.
+
+## Shell evidence
+
+[shfmt 3.14.1](https://github.com/mvdan/sh/releases/tag/v3.14.1), published
+2026-09-06, is pinned to commit
+`a3f0c75d21d918756fa38de8b5d3429efde7948b`. Its BSD 3-Clause license is shipped.
+The provisioner checks the official platform binary and pinned license hashes
+before publication. The parser receives source on stdin and an owned explicit
+dialect; it never sources the script or invokes its interpreter.
+
+Syntax checks cover all inventoried Shell; complexity covers production Shell.
+A supported shebang is required, including plain `env` and `env -S` forms.
+Unknown dialects, options, resource caps and invalid parser output remain explicit
+evidence gaps. POSIX/Bash/mksh support does not imply fish, zsh or PowerShell support.
+
+The `shell-ast-decision-complexity-v1` estimate starts each function at one and
+counts if/elif, loops/select, command/test Boolean operators, and case arms minus
+one. Shared case patterns count as one arm. Pipelines, negation and arithmetic
+operators add no decisions. Nested functions own their bodies; substitutions in
+the current function count. This is a documented AST estimate, not exact runtime
+paths or identical counting across languages. Ordinary commands are observations;
+command arguments and raw ASTs never enter reports. Alias/function resolution,
+expansions and runtime reachability remain uncertain.
+
+Ordinary dynamic command names and sourced paths are informational observations;
+they do not establish a defect. `eval` and recognized interpreter command strings
+remain high-severity review points. Known interpreter option operands are consumed
+before recognizing `-c`/`+c`; unknown options and script operands stop recognition.
+
+## Native clone evidence
+
+JavaScript/TypeScript clone checks retain jscpd's five-line/50-token minimum and
+1,000-line/100-KiB file limits. Native tokenizer identities determine which sources
+were observed. Filtered sources remain an evidence gap, even when the tool reports
+zero clones. A five-line source below the token window can have genuine zero clone
+observations; this does not prove that shorter similarities are absent.
+
+Clone ranges must fit the copied source, including UTF-16 columns and native line
+boundaries. Invalid, stale or oversized reports fail the check; report reads are
+capped at 4 MiB. The raw native report and source fragments are never published.
 
 ## Python delivery
 
@@ -73,13 +115,37 @@ requires explicit lock/provenance review and rebuilding/retesting the image.
 Image digest identity is distinct from release publication age or a passing
 runtime test. Current Docker CI results are the evidence of build/run support.
 
+## Controlled rule provenance
+
+The shipped Gitleaks configuration starts from the [exact upstream rules commit](https://github.com/gitleaks/gitleaks/blob/83d9cd684c87d95d656c1458ef04895a7f1cbd8e/config/gitleaks.toml).
+All 222 rule identifiers and their entropy thresholds, rule allowlists and stopwords
+remain. We removed the global filename exclusions so a lockfile can still contain
+a finding. The short-lived Bedrock rule now requires the complete signed payload
+instead of matching its public service marker. Its format follows the
+[pinned AWS generator](https://github.com/aws/aws-bedrock-token-generator-python/blob/228eec2bfcf209d53dc776c902e00d9e6548e508/aws_bedrock_token_generator/token_generator.py#L41).
+Synthetic positives cover Base64 alignment and optional session credentials;
+truncated, unsigned and ordinary-text controls stay clean. The rule recognizes
+that generator's ordering; it does not authenticate credentials or recognize
+arbitrary reordered encodings.
+
+The full shipped configuration SHA-256 is
+`38cea322df5f9b983be9cd57ad0a70720e8d876bc0283fc8d6c3c821aa431b5c`.
+The modified rules body SHA-256 is
+`89c72f76660e87008ec265b175acce1df9cc995d8075e4a9a81d7524b5ae7abe`.
+
+JavaScript execution observations use isolated TypeScript lexical symbols for
+imports, local variables, parameters and aliases. JavaScript retains its own
+correctness rules; TypeScript rules apply to TypeScript. Binding observations
+remain a syntax approximation without flow, runtime reachability or inter-file
+analysis. Complete source parsing does not make those observations exhaustive.
+
 ## Trusted executable discovery
 
 Analyzer discovery uses the installed Python interpreter's directory, system
 executable directories, and explicit absolute `DIFF_GREMLIN_TOOL_PATH` directories.
 It excludes target-local executable directories and generic shell `PATH` additions.
-For Docker, Node `.bin`, the Node binary, JDK tools, and Gitleaks have fixed trusted
-paths. The curl installer places Gitleaks alongside the installed Python tool.
+For Docker, Node `.bin`, the Node binary, JDK tools, Gitleaks and shfmt have fixed trusted
+paths. The curl installer places Gitleaks and shfmt alongside the installed Python tool.
 
 Analyzer processes receive a clean temporary HOME/config/cache, no provider token,
 and controlled settings. uv provides dependency isolation; it does not provide an

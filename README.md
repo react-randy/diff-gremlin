@@ -1,7 +1,13 @@
 # Diff Gremlin
 
-**Catch rough edges before merge.** Static risk checks for a repo or pull request,
-with findings, coverage, and JSON receipts. No model, API key, or AI-authorship guess.
+**Small gremlin. Big trust issues.**
+
+A quick slop check for pull requests. A second opinion before you adopt a repo.
+Static findings, clear coverage, and JSON receipts.
+
+Built for the [GPT-6.1 Sol](https://developers.openai.com/api/docs/models/gpt-6.1-sol)
+and [Opus 5.5](https://www.anthropic.com/claude-opus-5-5) era: generated code still owes
+you evidence. No model or API key required. It cannot guess who wrote your code.
 
 ## Install
 
@@ -14,11 +20,11 @@ diff-gremlin doctor
 ```
 
 The installer verifies the release wheel and dependency hashes, uses an isolated
-uv tool environment, and adds Gitleaks. Python full checks include PyScn where its
+uv tool environment, and adds Gitleaks and shfmt. Python full checks include PyScn where its
 platform wheel is available. It does not install Node or Java. See [platform support,
 manual installation, and uninstall](docs/installation.md).
 
-**Full toolchain, one command:** Python, TypeScript/JavaScript, Java, and secrets.
+**Full toolchain, one command:** Python, TypeScript/JavaScript, Java, Shell, and secrets.
 
 ```sh
 docker run --rm ghcr.io/react-randy/diff-gremlin:1.0.0 pr https://github.com/OWNER/REPO/pull/123
@@ -63,6 +69,17 @@ Git snapshot. The receipt records source identity, profile, policy version, tool
 findings, and missing evidence. Share the receipt alongside your adoption review;
 then inspect dependencies, tests, and project ownership yourself.
 
+## Read the verdict
+
+| Result | Your next move |
+| --- | --- |
+| **Hold** | Stop the merge or adoption. Inspect the named blockers. |
+| **Review** | Start with the located findings and changed signals. |
+| **Unknown** | Fill the listed evidence gaps before treating the score as usable. |
+| **No configured blockers** | Continue your review of tests, dependencies, and maintainers. |
+
+The gremlin brings receipts. You keep the merge button.
+
 ## Make CI decisions explicit
 
 ```sh
@@ -85,8 +102,9 @@ correctness certificate. It cannot tell you who wrote the code.
 ## What gets checked
 
 Python uses Ruff, Pyrefly, Lizard, Radon, and optional PyScn. JavaScript/TypeScript
-uses ESLint, TypeScript, Lizard, and jscpd. Java uses JDK parser/type controls and
-Lizard. Gitleaks and contextual source checks provide located security findings;
+uses ESLint lint and function complexity, TypeScript, and jscpd. Java uses JDK
+parser/type controls and Lizard. Shell uses shfmt for declared dialect syntax,
+function decisions, and command observations. Gitleaks and contextual source checks provide located security findings;
 repository hygiene and bounded Python Git history add context. Mixed repositories
 retain separate analyzer identities. [Exact tools and limits →](docs/toolchain.md)
 

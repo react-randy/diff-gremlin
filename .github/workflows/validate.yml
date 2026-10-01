@@ -12,7 +12,7 @@ jobs:
   package:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
       - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6.8.0
@@ -30,6 +30,8 @@ jobs:
         run: uv sync --locked --extra full --no-install-project --no-build --python 3.12.12
       - name: Install verified Gitleaks into the private tool environment
         run: uv run --no-sync python scripts/provision_gitleaks.py .venv/bin
+      - name: Install verified shfmt into the private tool environment
+        run: uv run --no-sync python scripts/provision_shfmt.py .venv/bin
       - name: Check source and tests
         env:
           PYTHONPATH: src
@@ -55,7 +57,7 @@ jobs:
         runner: [ubuntu-24.04, ubuntu-24.04-arm]
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.0.0
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
       - name: Build complete image

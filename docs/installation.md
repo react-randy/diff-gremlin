@@ -1,7 +1,7 @@
 # Installation
 
 Use Docker for the complete bundled cross-language toolchain. Use the curl
-installer for a user-local Python toolchain with Gitleaks. Run `diff-gremlin doctor`
+installer for a user-local Python toolchain with Gitleaks and Shell parsing. Run `diff-gremlin doctor`
 to see actual installed capabilities before scanning. Git must be installed for
 repository URLs, refs, comparisons, and history; the curl installer does not
 install system packages.
@@ -24,7 +24,8 @@ sh install.sh
 ```
 
 The installer verifies a fixed wheel SHA-256, verified core/full requirement
-files, and the Gitleaks provisioner. It uses uv 0.12.18 and Python 3.12.12. If your
+files, both Gitleaks and shfmt provisioners, and their shared HTTPS download helper.
+It uses uv 0.12.18 and Python 3.12.12. If your
 `uv` version differs, the installer places a verified uv binary in
 `${XDG_DATA_HOME:-$HOME/.local/share}/diff-gremlin/uv/0.12.18/`; it does not replace
 your existing uv executable. uv supplies the exact Python interpreter if missing.
@@ -32,9 +33,13 @@ your existing uv executable. uv supplies the exact Python interpreter if missing
 Third-party dependencies are wheels only. A temporary environment first downloads
 and checks every dependency hash. The final uv tool install runs offline from
 that private verified cache. Gitleaks 8.30.1 is independently hash-checked and placed
-inside the tool environment. Network/hash errors stop installation with an explicit
-error. If Gitleaks provisioning fails after the Python tool is installed, installation
-exits nonzero and reports the incomplete security coverage; rerun the installer.
+inside the tool environment. shfmt 3.14.1 and its BSD license are independently
+hash-checked in the same tool environment. Network/hash errors stop installation with an explicit
+error. If either native provisioner fails after the Python tool is installed, installation
+exits nonzero and reports the incomplete native coverage; rerun the installer.
+Each native asset transfer has a 60-second total deadline and a byte limit,
+including redirects and continuously slow responses. The verified helpers run
+under isolated Python and load only their adjacent verified download helper.
 
 Executables use uv's bin directory (normally `$HOME/.local/bin`). The installer
 prints the actual directory and command to add it to your shell's `PATH`; it
@@ -69,7 +74,7 @@ docker run --rm ghcr.io/react-randy/diff-gremlin:1.0.0 pr https://github.com/OWN
 ```
 
 The image runs as UID/GID 10001. It includes the pinned Python, Node, JDK 25, and
-Gitleaks tools. PR/MR URLs and Git HTTPS URLs need outbound network access. The
+Gitleaks and shfmt tools. PR/MR URLs and Git HTTPS URLs need outbound network access. The
 image receives no host home directory, Docker socket, provider login, or token
 unless you explicitly supply one.
 
@@ -98,7 +103,7 @@ uvx --no-build --exclude-newer 2026-09-24 \
   diff-gremlin check . --profile quick
 ```
 
-This minimal alternative does not install Gitleaks, Node, JDK, or PyScn. Missing
+This minimal alternative does not install Gitleaks, shfmt, Node, JDK, or PyScn. Missing
 required tools remain visible and produce exit 3. Prefer the verified curl installer
 for persistent Python use. uv itself must be installed from a trusted source.
 
@@ -122,7 +127,7 @@ docker build --tag diff-gremlin:local .
 docker run --rm diff-gremlin:local doctor
 ```
 
-The source environment alone does not supply Gitleaks/Node/JDK. See
+The source environment alone does not supply Gitleaks/shfmt/Node/JDK. See
 [development](development.md) and [toolchain](toolchain.md) for explicit setup.
 
 ## Uninstall
@@ -138,7 +143,7 @@ printed, or:
 "${XDG_DATA_HOME:-$HOME/.local/share}/diff-gremlin/uv/0.12.18/uv" tool uninstall diff-gremlin
 ```
 
-This removes the tool environment, its Gitleaks binary/license, and its console
+This removes the tool environment, its Gitleaks and shfmt binaries/licenses, and its console
 entry points (`diff-gremlin` and `vibe-check`). Remove only the installer-owned
 `diff-gremlin/uv/0.12.18` directory if you no longer need its private uv. uv-managed
 Python and other uv caches may be shared by your other tools; use uv's own management

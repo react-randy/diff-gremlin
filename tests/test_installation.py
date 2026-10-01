@@ -58,10 +58,12 @@ def installer_fixture(tmp_path, *, corrupt_wheel=False):
     wheel_name = "diff_gremlin-1.0.0-py3-none-any.whl"
     (assets / wheel_name).write_bytes(wheel + b"corrupt" if corrupt_wheel else wheel)
     (assets / "full-requirements.txt").write_text("# owned requirements fixture\n")
-    provisioner = (
-        "import pathlib,sys\npathlib.Path(sys.argv[1], 'gitleaks').write_text('fixture')\n"
-    )
+    provisioner = "import pathlib,sys\npathlib.Path(sys.argv[1], 'gitleaks').write_text('fixture')\n"
     (assets / "provision_gitleaks.py").write_text(provisioner)
+    (assets / "provision_shfmt.py").write_text(
+        provisioner.replace("'gitleaks'", "'shfmt'")
+    )
+    (assets / "download_asset.py").write_text("# owned transfer helper fixture\n")
     installer = (ROOT / "install.sh").read_text()
     installer = installer.replace(
         "REPLACE_WITH_FINAL_RELEASE_WHEEL_SHA256", hashlib.sha256(wheel).hexdigest()
@@ -69,6 +71,8 @@ def installer_fixture(tmp_path, *, corrupt_wheel=False):
     for name, file in (
         ("FULL_LOCK_SHA256", "full-requirements.txt"),
         ("GITLEAKS_SCRIPT_SHA256", "provision_gitleaks.py"),
+        ("SHFMT_SCRIPT_SHA256", "provision_shfmt.py"),
+        ("DOWNLOAD_SCRIPT_SHA256", "download_asset.py"),
     ):
         installer = re.sub(
             rf"(?m)^{name}=.*$",
@@ -127,7 +131,9 @@ else:
 
 def test_corrupt_download_never_installs_tool(tmp_path):
     script, env, tool, trace = installer_fixture(tmp_path, corrupt_wheel=True)
-    result = subprocess.run(["sh", script], env=env, capture_output=True, text=True, check=False)
+    result = subprocess.run(
+        ["sh", script], env=env, capture_output=True, text=True, check=False
+    )
     assert result.returncode == 1
     assert "checksum mismatch" in result.stderr
     assert not tool.exists()
@@ -135,11 +141,16 @@ def test_corrupt_download_never_installs_tool(tmp_path):
     assert not list(tmp_path.glob("diff-gremlin-install.*"))
 
 
-def test_corrupt_provisioner_never_executes_or_installs_tool(tmp_path):
+@pytest.mark.parametrize(
+    "helper", ["provision_gitleaks.py", "provision_shfmt.py", "download_asset.py"]
+)
+def test_corrupt_provisioner_never_executes_or_installs_tool(tmp_path, helper):
     script, env, tool, trace = installer_fixture(tmp_path)
-    provisioner = Path(env["FIXTURE_ASSETS"]) / "provision_gitleaks.py"
+    provisioner = Path(env["FIXTURE_ASSETS"]) / helper
     provisioner.write_text("raise RuntimeError('unverified code executed')\n")
-    result = subprocess.run(["sh", script], env=env, capture_output=True, text=True, check=False)
+    result = subprocess.run(
+        ["sh", script], env=env, capture_output=True, text=True, check=False
+    )
     assert result.returncode == 1
     assert "checksum mismatch" in result.stderr
     assert "unverified code executed" not in result.stderr
@@ -150,10 +161,14 @@ def test_corrupt_provisioner_never_executes_or_installs_tool(tmp_path):
 
 def test_installer_uses_verified_wheels_before_offline_install(tmp_path):
     script, env, tool, trace = installer_fixture(tmp_path)
-    result = subprocess.run(["sh", script], env=env, capture_output=True, text=True, check=False)
+    result = subprocess.run(
+        ["sh", script], env=env, capture_output=True, text=True, check=False
+    )
     assert result.returncode == 0, result.stderr
     commands = [json.loads(line) for line in trace.read_text().splitlines()]
-    pip_index = next(i for i, command in enumerate(commands) if command[1:3] == ["pip", "install"])
+    pip_index = next(
+        i for i, command in enumerate(commands) if command[1:3] == ["pip", "install"]
+    )
     install_index = next(
         i for i, command in enumerate(commands) if command[1:3] == ["tool", "install"]
     )
@@ -161,6 +176,7 @@ def test_installer_uses_verified_wheels_before_offline_install(tmp_path):
     assert "--offline" in commands[install_index]
     assert "--require-hashes" in commands[pip_index]
     assert (tool / "diff-gremlin/bin/gitleaks").read_text() == "fixture"
+    assert (tool / "diff-gremlin/bin/shfmt").read_text() == "fixture"
     assert "Uninstall:" in result.stdout
     assert not list(tmp_path.glob("diff-gremlin-install.*"))
 
@@ -195,7 +211,8 @@ def wheel_fixture(tmp_path, *, missing_asset=False):
     wheel = tmp_path / "diff_gremlin-1.0.0-py3-none-any.whl"
     with zipfile.ZipFile(wheel, "w") as archive:
         archive.writestr(
-            "diff_gremlin-1.0.0.dist-info/METADATA", "Name: diff-gremlin\nVersion: 1.0.0\n"
+            "diff_gremlin-1.0.0.dist-info/METADATA",
+            "Name: diff-gremlin\nVersion: 1.0.0\n",
         )
         archive.writestr(
             "diff_gremlin-1.0.0.dist-info/entry_points.txt",
@@ -224,7 +241,8 @@ def test_release_staging_freezes_wheel_hash_without_changing_wheel(tmp_path):
     assert wheel.read_bytes() == original
     assert (destination / wheel.name).read_bytes() == original
     assert (
-        f"RELEASE_WHEEL_SHA256={release.digest(wheel)}" in (destination / "install.sh").read_text()
+        f"RELEASE_WHEEL_SHA256={release.digest(wheel)}"
+        in (destination / "install.sh").read_text()
     )
     assert (ROOT / "install.sh").read_bytes() == original_installer
     for line in (destination / "SHA256SUMS").read_text().splitlines():
@@ -234,11 +252,22 @@ def test_release_staging_freezes_wheel_hash_without_changing_wheel(tmp_path):
         release.stage_release(wheel, destination)
 
 
-def test_release_rejects_wheel_without_javascript_complexity_driver(tmp_path):
+@pytest.mark.parametrize(
+    "omitted",
+    [
+        "diff_gremlin/analyzers/javascript/assets/complexity.cjs",
+        "diff_gremlin/analyzers/javascript/assets/duplication.cjs",
+        "diff_gremlin/analyzers/shell/assets/schema.json",
+        "diff_gremlin/analyzers/shell/assets/operators.json",
+        "diff_gremlin/analyzers/shell/assets/SHFMT-LICENSE",
+    ],
+)
+def test_release_rejects_wheel_without_required_parser_asset(tmp_path, omitted):
     release, wheel = wheel_fixture(tmp_path)
-    omitted = "diff_gremlin/analyzers/javascript/assets/complexity.cjs"
     with zipfile.ZipFile(wheel) as source:
-        members = {name: source.read(name) for name in source.namelist() if name != omitted}
+        members = {
+            name: source.read(name) for name in source.namelist() if name != omitted
+        }
     with zipfile.ZipFile(wheel, "w") as archive:
         for name, value in members.items():
             archive.writestr(name, value)

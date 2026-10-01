@@ -10,7 +10,9 @@ RELEASE_URL=https://github.com/react-randy/diff-gremlin/releases/download/v1.0.0
 RELEASE_WHEEL_SHA256=REPLACE_WITH_FINAL_RELEASE_WHEEL_SHA256
 CORE_LOCK_SHA256=c20982ad0e9a87d533b0c90333cf121590b2708467aa0f8d5a9a91f6d996be1a
 FULL_LOCK_SHA256=49350b2248a6208b2a156abca7a9305bc5945755d8dc8adf015b1f00572b52bf
-GITLEAKS_SCRIPT_SHA256=d4a7c66016615ccfef08ea11f5fa9c77ec3ebc7a0fb29184d9511cf052641297
+GITLEAKS_SCRIPT_SHA256=04512be352ff4bdeb26167167227422a35243213212d928c54c6c28baedbef44
+SHFMT_SCRIPT_SHA256=4d0aec9eaf38a448eb2810e32c319be288f10be615419a5eb2a71e31f57fdd89
+DOWNLOAD_SCRIPT_SHA256=b5e14f72993de145781df7fb87a8bf871ef2b5702bcc2e8a5b71c756a8e8ca18
 
 fail() {
     printf 'diff-gremlin install: %s\n' "$*" >&2
@@ -105,6 +107,10 @@ fetch_release() {
     verify "$lock" "$lock_hash"
     download "$RELEASE_URL/provision_gitleaks.py" "$install_temp/provision_gitleaks.py"
     verify "$install_temp/provision_gitleaks.py" "$GITLEAKS_SCRIPT_SHA256"
+    download "$RELEASE_URL/provision_shfmt.py" "$install_temp/provision_shfmt.py"
+    verify "$install_temp/provision_shfmt.py" "$SHFMT_SCRIPT_SHA256"
+    download "$RELEASE_URL/download_asset.py" "$install_temp/download_asset.py"
+    verify "$install_temp/download_asset.py" "$DOWNLOAD_SCRIPT_SHA256"
 }
 
 verify_dependencies() {
@@ -126,6 +132,8 @@ install_tool() {
     tool_python="$tool_directory/diff-gremlin/bin/python"
     "$tool_python" -I "$install_temp/provision_gitleaks.py" "$tool_directory/diff-gremlin/bin" \
         || fail 'Gitleaks installation failed; Diff Gremlin is installed with incomplete security coverage. Rerun this installer to repair it.'
+    "$tool_python" -I "$install_temp/provision_shfmt.py" "$tool_directory/diff-gremlin/bin" \
+        || fail 'shfmt installation failed; Diff Gremlin is installed with incomplete Shell coverage. Rerun this installer to repair it.'
 }
 
 show_result() {

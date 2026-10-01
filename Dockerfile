@@ -25,8 +25,11 @@ RUN uv build --wheel --no-build-isolation --python /build-env/bin/python --out-d
 RUN uv venv /opt/gremlin/python \
     && uv pip install --python /opt/gremlin/python/bin/python --require-hashes --only-binary :all: -r /requirements/full-requirements.txt \
     && uv pip install --python /opt/gremlin/python/bin/python --no-deps /wheels/*.whl
+COPY scripts/download_asset.py /download_asset.py
 COPY scripts/provision_gitleaks.py /provision_gitleaks.py
-RUN python /provision_gitleaks.py /opt/gremlin/bin
+RUN python -I /provision_gitleaks.py /opt/gremlin/bin
+COPY scripts/provision_shfmt.py /provision_shfmt.py
+RUN python -I /provision_shfmt.py /opt/gremlin/bin
 
 FROM system AS runtime
 LABEL org.opencontainers.image.title="Diff Gremlin" \
