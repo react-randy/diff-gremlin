@@ -8,8 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from diff_gremlin.acquisition import repositories
+from diff_gremlin.acquisition import object_store, objects, repositories, working, working_reads
 from diff_gremlin.acquisition.auth import git_auth
+from diff_gremlin.acquisition.git import Git
 from diff_gremlin.acquisition.snapshots import acquire_comparison, acquire_source
 from diff_gremlin.domain.sources import ReviewTarget
 
@@ -124,9 +125,7 @@ def test_ref_is_exact_even_when_working_tree_differs(repository):
         assert (source.root / "code.py").read_text() == "original = 1\n"
 
 
-def test_source_blobs_preserve_nonutf8_and_secret_matching_bytes(
-    repository, monkeypatch
-):
+def test_source_blobs_preserve_nonutf8_and_secret_matching_bytes(repository, monkeypatch):
     repo, _base, _head = repository
     token = "fake-source-token"
     monkeypatch.setenv("GH_TOKEN", token)
@@ -200,17 +199,13 @@ def test_review_fork_same_name_and_moving_refs_use_captured_shas(repository, tmp
         assert pair.comparison_base_sha == base
 
 
-def test_remote_wrong_object_rejected_and_no_secret_argv_or_remotes(
-    repository, monkeypatch
-):
+def test_remote_wrong_object_rejected_and_no_secret_argv_or_remotes(repository, monkeypatch):
     repo, base, head = repository
     calls = []
 
     def fake_fetch(git_client, destination, url, ref):
         calls.append((url, ref))
-        shutil.copytree(
-            repo / ".git" / "objects", destination / "objects", dirs_exist_ok=True
-        )
+        shutil.copytree(repo / ".git" / "objects", destination / "objects", dirs_exist_ok=True)
         (destination / "FETCH_HEAD").write_text(head + "\n")
 
     monkeypatch.setattr(repositories, "_fetch", fake_fetch)
@@ -310,17 +305,13 @@ def test_local_comparison_never_fetches(repository, monkeypatch):
         pass
 
 
-def test_remote_success_is_object_only_without_persistent_remote_or_secret(
-    repository, monkeypatch
-):
+def test_remote_success_is_object_only_without_persistent_remote_or_secret(repository, monkeypatch):
     repo, _base, head = repository
     monkeypatch.setenv("GH_TOKEN", "fake-private-token")
 
     def fake_fetch(_git_client, destination, url, ref):
         assert "fake-private-token" not in url + ref
-        shutil.copytree(
-            repo / ".git" / "objects", destination / "objects", dirs_exist_ok=True
-        )
+        shutil.copytree(repo / ".git" / "objects", destination / "objects", dirs_exist_ok=True)
         (destination / "FETCH_HEAD").write_text(head + "\n")
 
     monkeypatch.setattr(repositories, "_fetch", fake_fetch)
@@ -330,3 +321,81 @@ def test_remote_success_is_object_only_without_persistent_remote_or_secret(
         assert "fake-private-token" not in config
         assert "remote" not in config
         assert git(source.history_repo, "rev-list", "--count", "HEAD") == "2"
+
+
+@pytest.mark.parametrize(
+    ("output", "message"),
+    [
+        (b"missing newline", "incomplete object header"),
+        (b"wrong blob 3\nabc\n", "captured tree metadata"),
+        (b"a blob 3\nab", "incomplete object body"),
+        (b"a blob 3\nabc!", "incomplete object body"),
+        (b"a blob 3\nabc\nextra", "unexpected trailing data"),
+    ],
+)
+def test_blob_batches_reject_malformed_protocol(output, message, tmp_path, monkeypatch):
+    client = Git(120)
+    monkeypatch.setattr(client, "run", lambda *args, **kwargs: output.decode())
+    entries = (objects.TreeEntry("code.py", "100644", "a", 3),)
+    with pytest.raises(RuntimeError, match=message):
+        list(objects._blob_batches(client, tmp_path, entries))
+
+
+@pytest.mark.parametrize("limit", ["file", "tree", "entries"])
+def test_working_copy_failure_preserves_source_bytes(limit, tmp_path, monkeypatch):
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "code.py").write_bytes(b"captured bytes")
+    if limit == "file":
+        monkeypatch.setattr(working_reads, "MAX_FILE_BYTES", 2)
+    elif limit == "tree":
+        monkeypatch.setattr(working, "MAX_TREE_BYTES", 2)
+    elif limit == "entries":
+        monkeypatch.setattr(working, "MAX_ENTRIES", 0)
+    with (
+        pytest.raises(RuntimeError, match="limits"),
+        acquire_source(str(source)),
+    ):
+        pytest.fail("copy limit must prevent snapshot delivery")
+    assert (source / "code.py").read_bytes() == b"captured bytes"
+
+
+def test_working_copy_read_failure_retains_safe_error(tmp_path, monkeypatch):
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "code.py").write_text("safe")
+
+    def denied(*args, **kwargs):
+        raise PermissionError("private-path")
+
+    monkeypatch.setattr(working_reads.os, "open", denied)
+    with pytest.raises(RuntimeError, match="could not read a path safely") as error:
+        working.copy_working_tree(source, tmp_path / "snapshot", deadline=float("inf"))
+    assert isinstance(error.value.__cause__, PermissionError)
+    assert "private-path" not in str(error.value)
+
+
+@pytest.mark.parametrize("limit", ["bytes", "entries"])
+def test_inert_history_copy_bounds_preserve_caller(repository, limit, monkeypatch):
+    repo, _base, _head = repository
+    before = fingerprint(repo)
+    if limit == "bytes":
+        monkeypatch.setattr(object_store, "MAX_HISTORY_BYTES", 0)
+    elif limit == "entries":
+        monkeypatch.setattr(object_store, "MAX_ENTRIES", 0)
+    with (
+        pytest.raises(RuntimeError, match="limits"),
+        acquire_source(str(repo)),
+    ):
+        pytest.fail("history limit must prevent snapshot delivery")
+    assert fingerprint(repo) == before
+
+
+@pytest.mark.parametrize("copy", [working.copy_working_tree, objects.copy_object_store])
+def test_filesystem_copy_expired_deadline_fails_before_source_write(copy, tmp_path):
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "code.py").write_bytes(b"captured bytes")
+    with pytest.raises(RuntimeError, match="deadline"):
+        copy(source, tmp_path / "snapshot", deadline=0)
+    assert (source / "code.py").read_bytes() == b"captured bytes"
