@@ -41,8 +41,8 @@ ENV PATH="/opt/gremlin/python/bin:/opt/gremlin/node-bin:/opt/java/openjdk/bin:/u
     DIFF_GREMLIN_TOOL_PATH="/opt/gremlin/node/node_modules/.bin:/opt/gremlin/node-bin:/opt/java/openjdk/bin:/opt/gremlin/bin" \
     HOME="/tmp" \
     PYTHONDONTWRITEBYTECODE="1"
-RUN groupadd --gid 10001 gremlin \
-    && useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin gremlin \
+RUN /usr/sbin/groupadd --gid 10001 gremlin \
+    && /usr/sbin/useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin gremlin \
     && mkdir /workspace
 USER 10001:10001
 WORKDIR /workspace
