@@ -1,0 +1,1 @@
+"""Immutable provider review metadata."""
