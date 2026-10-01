@@ -10,11 +10,47 @@ from diff_gremlin.analyzers.javascript.installed import (
     sibling_package,
     trusted_executable,
 )
-from diff_gremlin.analyzers.javascript.output import evidence, located_findings, natural
+from diff_gremlin.analyzers.javascript.output import (
+    evidence,
+    failure_status,
+    located_findings,
+    natural,
+    valid_run,
+)
 from diff_gremlin.domain.context import ScanContext
 from diff_gremlin.domain.stages import StageResult
 
 _ID, _LABEL = "javascript.lint.eslint", "JavaScript/TypeScript lint"
+
+
+def _diagnostics(stdout, files):
+    data = evidence(stdout, files)
+    if not all(
+        natural(data.get(k)) for k in ("error_count", "warning_count", "fatal_count")
+    ):
+        raise ValueError("invalid diagnostic counts")
+    findings = located_findings(data["findings"], files)
+    if len(findings) != data["error_count"] + data["warning_count"]:
+        raise ValueError("diagnostic counts differ from findings")
+    return data, findings
+
+
+def _lint_environment(ctx):
+    package = installed_package(ctx, "eslint", "eslint")
+    node = trusted_executable(ctx, "node")
+    if not package or not node:
+        return None
+    dependencies = [
+        sibling_package(package, name)
+        for name in (
+            "@typescript-eslint/parser",
+            "@typescript-eslint/eslint-plugin",
+            "globals",
+        )
+    ]
+    if not all(dependencies):
+        return None
+    return node, package, dependencies
 
 
 def analyze_js_lint(ctx: ScanContext) -> StageResult:
@@ -37,22 +73,12 @@ def analyze_js_lint(ctx: ScanContext) -> StageResult:
 
     if not files:
         return absent("No JavaScript or TypeScript production files", "skipped")
-    package = installed_package(ctx, "eslint", "eslint")
-    node = trusted_executable(ctx, "node")
-    if not package or not node:
-        return absent("Installed trusted Node/ESLint package unavailable")
-    dependencies = [
-        sibling_package(package, name)
-        for name in (
-            "@typescript-eslint/parser",
-            "@typescript-eslint/eslint-plugin",
-            "globals",
-        )
-    ]
-    if not all(dependencies):
+    environment = _lint_environment(ctx)
+    if environment is None:
         return absent(
-            "Controlled ESLint parser/plugin/globals dependencies unavailable"
+            "Installed trusted Node/ESLint/parser/plugin/globals dependencies unavailable"
         )
+    node, package, dependencies = environment
     asset = Path(__file__).parent / "assets" / "lint.cjs"
     result = ctx.run(
         [
@@ -64,21 +90,13 @@ def analyze_js_lint(ctx: ScanContext) -> StageResult:
         ],
         cwd=ctx.scratch,
     )
-    if result.status != "ok" or result.returncode != 0:
+    if not valid_run(result):
         return absent(
             f"Controlled ESLint invocation {result.status}; exit {result.returncode}",
-            result.status if result.status in {"missing", "timeout"} else "failed",
+            failure_status(result),
         )
     try:
-        data = evidence(result.stdout, files)
-        if not all(
-            natural(data.get(k))
-            for k in ("error_count", "warning_count", "fatal_count")
-        ):
-            raise ValueError("invalid diagnostic counts")
-        findings = located_findings(data["findings"], files)
-        if len(findings) != data["error_count"] + data["warning_count"]:
-            raise ValueError("diagnostic counts differ from findings")
+        data, findings = _diagnostics(result.stdout, files)
     except (ValueError, TypeError):
         return absent(
             "Controlled ESLint returned malformed or incomplete evidence", "failed"

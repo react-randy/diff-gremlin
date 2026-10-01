@@ -1,14 +1,15 @@
 """Failure controls and actual-tool fixtures for bounded polyglot evidence."""
 
 import json
-import os
 import shutil
 import subprocess
 
 import pytest
+from diff_gremlin.process import trusted_path
 
 from diff_gremlin.analyzers.java.structure import analyze_java_structure
 from diff_gremlin.analyzers.java.types import analyze_java_types
+from diff_gremlin.analyzers.javascript.complexity import analyze_js_complexity
 from diff_gremlin.analyzers.javascript.duplication import analyze_js_duplication
 from diff_gremlin.analyzers.javascript.installed import trusted_executable
 from diff_gremlin.analyzers.javascript.lint import analyze_js_lint
@@ -19,7 +20,7 @@ from diff_gremlin.domain.process import RunResult
 
 def runner(command, *, cwd, timeout, **kwargs):
     environment = {
-        "PATH": os.environ.get("PATH", ""),
+        "PATH": trusted_path(cwd),
         "LANG": "C.UTF-8",
         "HOME": str(cwd),
     }
@@ -76,6 +77,7 @@ def require_tools(*names):
     "adapter",
     [
         analyze_js_lint,
+        analyze_js_complexity,
         analyze_ts_types,
         analyze_js_duplication,
         analyze_java_structure,
@@ -89,6 +91,7 @@ def test_empty_scope_is_explicitly_skipped(context, adapter):
 
 
 def test_target_executable_is_rejected(context, monkeypatch):
+    monkeypatch.delenv("DIFF_GREMLIN_TOOL_PATH", raising=False)
     ctx = context([("a.ts", "typescript", "export const n = 1;")])
     binary = ctx.root / "bin" / "tsc"
     binary.parent.mkdir()
@@ -115,6 +118,7 @@ def test_target_executable_is_rejected(context, monkeypatch):
     "adapter",
     [
         analyze_js_lint,
+        analyze_js_complexity,
         analyze_ts_types,
         analyze_js_duplication,
         analyze_java_structure,
@@ -198,14 +202,18 @@ def test_project_configs_and_wrappers_cannot_execute(context):
         adapter(ctx)
         for adapter in (
             analyze_js_lint,
+            analyze_js_complexity,
             analyze_ts_types,
             analyze_js_duplication,
             analyze_java_structure,
             analyze_java_types,
         )
     ]
-    assert results[0].status == "ok"
-    assert results[1].status == "ok" and results[4].status == "ok"
+    stages = {result.id: result for result in results}
+    assert stages["javascript.lint.eslint"].status == "ok"
+    assert stages["complexity.javascript"].status == "ok"
+    assert stages["typescript.types.tsc"].status == "ok"
+    assert stages["java.types"].status == "ok"
     assert not sentinel.exists()
     assert before == {p.name: p.read_bytes() for p in ctx.root.iterdir() if p.is_file()}
 
@@ -368,3 +376,128 @@ def test_java_reflective_and_unsafe_vocabulary_requires_actual_calls(context):
         "java.script-eval",
     }
     assert {f.line for f in result.findings} == {4}
+
+
+def test_caller_path_executable_outside_snapshot_is_never_trusted(
+    context, tmp_path, monkeypatch
+):
+    ctx = context([("a.ts", "typescript", "export const value = 1;")])
+    caller = tmp_path / "caller-bin"
+    caller.mkdir()
+    sentinel = tmp_path / "executed"
+    for name in ("tsc", "eslint", "jscpd", "gitleaks"):
+        binary = caller / name
+        binary.write_text("#!/bin/sh\ntouch " + str(sentinel) + "\n")
+        binary.chmod(0o755)
+    monkeypatch.setenv("PATH", str(caller))
+    monkeypatch.delenv("DIFF_GREMLIN_TOOL_PATH", raising=False)
+    for name in ("tsc", "eslint", "jscpd", "gitleaks"):
+        resolved = trusted_executable(ctx, name)
+        assert resolved is None or not resolved.startswith(str(caller))
+    assert analyze_ts_types(ctx).status == "missing"
+    assert not sentinel.exists()
+
+
+def test_native_js_complexity_keeps_same_line_arrows_branches_and_ts_methods(context):
+    require_tools("node", "eslint", "tsc")
+    source = """export const callbacks = [() => 1, () => 2];
+export function branch(value: number) { if (value) return 1; return 0; }
+class Sample { method(value: number) { return value ? 1 : 2; }}
+"""
+    result = analyze_js_complexity(context([("a.ts", "typescript", source)]))
+    assert result.status == "ok", result.reason
+    assert result.version == "10.11.0"
+    assert result.metrics["functions"] == 4
+    assert result.metrics["max_cc"] == 2 and result.metrics["average_cc"] == 1.5
+    rows = result.metrics["function_observations"]
+    assert [row["cc"] for row in rows] == [1, 1, 2, 2]
+    arrows = [row for row in rows if row["line"] == 1]
+    assert len(arrows) == 2 and arrows[0]["column"] != arrows[1]["column"]
+    assert not result.findings
+
+
+def test_native_js_complexity_hotspot_and_inline_suppression_control(context):
+    require_tools("node", "eslint", "tsc")
+    source = (
+        "/* eslint complexity: off */\nexport function branch(value) {\n"
+        + "".join(f"if (value === {number}) return {number};\n" for number in range(11))
+        + "return 99;}"
+    )
+    result = analyze_js_complexity(context([("a.js", "javascript", source)]))
+    assert result.status == "ok"
+    assert result.metrics["functions"] == 1 and result.metrics["max_cc"] == 12
+    assert result.metrics["hotspots"][0]["cc"] == 12
+    assert result.findings[0].line == 2 and result.findings[0].severity == "medium"
+
+
+def test_native_js_complexity_zero_functions_and_syntax_failure(context):
+    require_tools("node", "eslint", "tsc")
+    zero = analyze_js_complexity(
+        context([("a.js", "javascript", "export const value = 1;")])
+    )
+    assert zero.status == "ok" and zero.metrics["functions"] == 0
+    assert zero.metrics["max_cc"] == 0 and zero.metrics["average_cc"] == 0
+    syntax = analyze_js_complexity(
+        context([("broken.ts", "typescript", "function broken(")])
+    )
+    assert syntax.status == "limited" and syntax.metrics == {}
+
+
+def test_native_js_complexity_covers_implicit_class_code_paths(context):
+    require_tools("node", "eslint", "tsc")
+    source = "class Sample { value = condition ? 1 : 0; static { if (condition) {} } method() {} }"
+    result = analyze_js_complexity(context([("a.js", "javascript", source)]))
+    assert result.status == "ok", result.reason
+    assert result.metrics["functions"] == 3
+    rows = result.metrics["function_observations"]
+    assert {row["kind"] for row in rows} == {
+        "function",
+        "class-field-initializer",
+        "class-static-block",
+    }
+    assert sorted(row["cc"] for row in rows) == [1, 2, 2]
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"functions": [], "expected_count": 1, "parse_errors": 0},
+        {"functions": [], "expected_count": 0, "parse_errors": True},
+        {
+            "functions": [
+                {
+                    "path": "../outside",
+                    "line": 1,
+                    "column": 1,
+                    "cc": 1,
+                    "kind": "function",
+                }
+            ],
+            "expected_count": 1,
+            "parse_errors": 0,
+        },
+    ],
+)
+def test_native_js_complexity_rejects_incomplete_or_malformed_evidence(
+    context, payload
+):
+    require_tools("node", "eslint", "tsc")
+
+    def fake(command, **kwargs):
+        file = command[-1]
+        return RunResult(
+            tuple(command), 0, json.dumps({"files": [file], "findings": [], **payload})
+        )
+
+    result = analyze_js_complexity(
+        context([("a.js", "javascript", "function run() {}")], fake)
+    )
+    assert result.status == "failed" and result.metrics == {}
+
+
+def test_lint_inline_suppression_cannot_hide_controlled_rules(context):
+    require_tools("node", "eslint", "tsc")
+    source = "/* eslint eqeqeq: off */\nexport function compare(value) { return value == 1; }"
+    result = analyze_js_lint(context([("a.js", "javascript", source)]))
+    assert result.status == "ok"
+    assert any(f.rule == "eqeqeq" for f in result.findings)

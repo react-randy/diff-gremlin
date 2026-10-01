@@ -24,11 +24,42 @@ public final class StructureProbe {
                 ",\"line\":"+unit.getLineMap().getLineNumber(offset)+",\"column\":"+unit.getLineMap().getColumnNumber(offset)+
                 ",\"rule\":"+quote(rule)+",\"severity\":"+quote(severity)+"}");
         }
+        private List<String> commandParts(List<? extends ExpressionTree> arguments) {
+            if (arguments.isEmpty()) return List.of();
+            ExpressionTree first = arguments.get(0);
+            if (first instanceof NewArrayTree array) {
+                return literalParts(array.getInitializers());
+            }
+            List<String> values = literalParts(arguments);
+            if (values.size() == 1) return Arrays.asList(values.get(0).split("\\s+"));
+            return values;
+        }
+        private List<String> literalParts(List<? extends ExpressionTree> expressions) {
+            if (expressions == null) return List.of();
+            List<String> values = new ArrayList<>();
+            for (ExpressionTree expression: expressions) {
+                if (!(expression instanceof LiteralTree literal) || !(literal.getValue() instanceof String value)) break;
+                values.add(value);
+            }
+            return values;
+        }
+        private boolean explicitShell(List<? extends ExpressionTree> arguments) {
+            List<String> values = commandParts(arguments);
+            if (values.size() < 2) return false;
+            String executable = values.get(0).replace('\\', '/');
+            String name = executable.substring(executable.lastIndexOf('/') + 1).toLowerCase(Locale.ROOT);
+            return Set.of("sh", "bash", "zsh", "dash", "cmd", "cmd.exe", "powershell", "powershell.exe", "pwsh").contains(name)
+                && Set.of("-c", "/c", "-command").contains(values.get(1).toLowerCase(Locale.ROOT));
+        }
+        private void processFinding(Tree node, List<? extends ExpressionTree> arguments, String rule) {
+            if (explicitShell(arguments)) finding(node, "java.shell-execution", "high");
+            else finding(node, rule, "info");
+        }
         @Override public Void visitClass(ClassTree tree, Void unused) { types++; return super.visitClass(tree, unused); }
         @Override public Void visitMethod(MethodTree tree, Void unused) { methods++; return super.visitMethod(tree, unused); }
         @Override public Void visitMethodInvocation(MethodInvocationTree tree, Void unused) {
             String select = tree.getMethodSelect().toString().replace(" ", "");
-            if (select.equals("Runtime.getRuntime().exec")) finding(tree, "java.runtime-exec", "medium");
+            if (select.equals("Runtime.getRuntime().exec")) processFinding(tree, tree.getArguments(), "java.runtime-exec");
             else if (select.equals("System.exit")) finding(tree, "java.system-exit", "low");
             else if (select.equals("Class.forName")) finding(tree, "java.reflective-load", "low");
             else if (select.endsWith(".setAccessible")) finding(tree, "java.reflective-access", "low");
@@ -39,7 +70,7 @@ public final class StructureProbe {
         }
         @Override public Void visitNewClass(NewClassTree tree, Void unused) {
             String name = tree.getIdentifier().toString();
-            if (name.equals("ProcessBuilder") || name.equals("java.lang.ProcessBuilder")) finding(tree, "java.process-builder", "info");
+            if (name.equals("ProcessBuilder") || name.equals("java.lang.ProcessBuilder")) processFinding(tree, tree.getArguments(), "java.process-builder");
             return super.visitNewClass(tree, unused);
         }
     }

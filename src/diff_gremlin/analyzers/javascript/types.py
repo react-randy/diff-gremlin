@@ -9,11 +9,55 @@ from diff_gremlin.analyzers.javascript.installed import (
     package_version,
     trusted_executable,
 )
-from diff_gremlin.analyzers.javascript.output import evidence, located_findings, natural
+from diff_gremlin.analyzers.javascript.output import (
+    evidence,
+    failure_status,
+    located_findings,
+    natural,
+    valid_run,
+)
 from diff_gremlin.domain.context import ScanContext
 from diff_gremlin.domain.stages import StageResult
 
 _ID, _LABEL = "typescript.types.tsc", "TypeScript static types"
+
+
+def _diagnostics(stdout, files):
+    data = evidence(stdout, files)
+    if not all(
+        natural(data.get(k))
+        for k in (
+            "error_count",
+            "warning_count",
+            "dependency_count",
+            "global_count",
+        )
+    ):
+        raise ValueError("invalid diagnostic counts")
+    findings = located_findings(data["findings"], files)
+    if (
+        len(findings) + data["global_count"]
+        != data["error_count"] + data["warning_count"]
+    ):
+        raise ValueError("incomplete diagnostic counts")
+    return data, findings
+
+
+def _type_environment(ctx):
+    package = installed_package(ctx, "tsc", "typescript")
+    node = trusted_executable(ctx, "node")
+    return (node, package) if node and package else None
+
+
+def _type_metrics(data):
+    return {
+        key: data[key]
+        for key in ("error_count", "warning_count", "dependency_count", "global_count")
+    }
+
+
+def _type_limit(data):
+    return data["dependency_count"] > 0 or data["global_count"] > 0
 
 
 def analyze_ts_types(ctx: ScanContext) -> StageResult:
@@ -34,10 +78,10 @@ def analyze_ts_types(ctx: ScanContext) -> StageResult:
 
     if not files:
         return absent("No TypeScript production files", "skipped")
-    package = installed_package(ctx, "tsc", "typescript")
-    node = trusted_executable(ctx, "node")
-    if not node or not package:
+    environment = _type_environment(ctx)
+    if environment is None:
         return absent("Installed trusted Node/TypeScript package unavailable")
+    node, package = environment
     result = ctx.run(
         [
             node,
@@ -47,34 +91,18 @@ def analyze_ts_types(ctx: ScanContext) -> StageResult:
         ],
         cwd=ctx.scratch,
     )
-    if result.status != "ok" or result.returncode != 0:
+    if not valid_run(result):
         return absent(
             f"Controlled TypeScript invocation {result.status}; exit {result.returncode}",
-            result.status if result.status in {"missing", "timeout"} else "failed",
+            failure_status(result),
         )
     try:
-        data = evidence(result.stdout, files)
-        if not all(
-            natural(data.get(k))
-            for k in (
-                "error_count",
-                "warning_count",
-                "dependency_count",
-                "global_count",
-            )
-        ):
-            raise ValueError("invalid diagnostic counts")
-        findings = located_findings(data["findings"], files)
-        if (
-            len(findings) + data["global_count"]
-            != data["error_count"] + data["warning_count"]
-        ):
-            raise ValueError("incomplete diagnostic counts")
+        data, findings = _diagnostics(result.stdout, files)
     except (ValueError, TypeError):
         return absent(
             "Controlled TypeScript returned malformed or incomplete evidence", "failed"
         )
-    limited = data["dependency_count"] > 0 or data["global_count"] > 0
+    limited = _type_limit(data)
     return StageResult(
         _ID,
         _LABEL,
@@ -82,15 +110,7 @@ def analyze_ts_types(ctx: ScanContext) -> StageResult:
         "limited" if limited else "ok",
         "typescript",
         package_version(package),
-        metrics={
-            k: data[k]
-            for k in (
-                "error_count",
-                "warning_count",
-                "dependency_count",
-                "global_count",
-            )
-        },
+        metrics=_type_metrics(data),
         findings=findings,
         reason="Fixed static options; unresolved dependencies/global diagnostics limit semantics"
         if limited

@@ -20,34 +20,44 @@ _LOCKS = {
 }
 
 
-def analyze_hygiene(ctx: ScanContext) -> StageResult:
-    files = {f.relative_path: f for f in ctx.files}
-    roots = {name: file for name, file in files.items() if "/" not in name}
-    license_found = any(
-        name.lower().split(".")[0] in _LICENSES and f.size_bytes > 0
-        for name, f in roots.items()
-    )
-    readme_found = False
-    unreadable = []
+def _readmes(roots):
+    present, unreadable = False, []
     for name, file in roots.items():
         if name.lower().split(".")[0] != "readme":
             continue
         try:
-            readme_found |= len(file.path.read_text(encoding="utf-8").strip()) > 100
+            present |= len(file.path.read_text(encoding="utf-8").strip()) > 100
         except (OSError, UnicodeError):
             unreadable.append(name)
-    checks = {
-        "license_file": license_found,
+    return present, unreadable
+
+
+def _ci_present(files, roots):
+    return ".gitlab-ci.yml" in roots or any(
+        name.startswith(".github/workflows/") and name.endswith((".yml", ".yaml"))
+        for name in files
+    )
+
+
+def _checks(ctx, files, roots, readme_found):
+    return {
+        "license_file": any(
+            name.lower().split(".")[0] in _LICENSES and f.size_bytes > 0
+            for name, f in roots.items()
+        ),
         "nontrivial_readme": readme_found,
         "test_files": any(file.is_test and file.size_bytes > 0 for file in ctx.files),
         "gitignore_file": ".gitignore" in roots,
-        "ci_configuration": any(
-            name.startswith(".github/workflows/") and name.endswith((".yml", ".yaml"))
-            for name in files
-        )
-        or ".gitlab-ci.yml" in roots,
+        "ci_configuration": _ci_present(files, roots),
         "dependency_lockfile": any(name in _LOCKS for name in roots),
     }
+
+
+def analyze_hygiene(ctx: ScanContext) -> StageResult:
+    files = {f.relative_path: f for f in ctx.files}
+    roots = {name: file for name, file in files.items() if "/" not in name}
+    readme_found, unreadable = _readmes(roots)
+    checks = _checks(ctx, files, roots, readme_found)
     findings = [
         Finding(
             f"hygiene.{name}",

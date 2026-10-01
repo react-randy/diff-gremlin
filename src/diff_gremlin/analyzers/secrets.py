@@ -11,7 +11,7 @@ from diff_gremlin.analyzers.status import unavailable
 from diff_gremlin.analyzers.versions import tool_version
 
 from diff_gremlin.analyzers.javascript.installed import trusted_executable
-from diff_gremlin.analyzers.javascript.output import natural
+from diff_gremlin.analyzers.javascript.output import failure_status, positive, valid_run
 from diff_gremlin.domain.context import ScanContext
 from diff_gremlin.domain.findings import Finding
 from diff_gremlin.domain.stages import StageResult
@@ -114,44 +114,112 @@ def _analyze_patterns(ctx: ScanContext) -> StageResult:
     )
 
 
+def _gitleaks_row(row, source, selected):
+    if (
+        not isinstance(row, dict)
+        or not isinstance(row.get("RuleID"), str)
+        or not row["RuleID"]
+    ):
+        raise ValueError("invalid Gitleaks rule")
+    path = row.get("File")
+    if not isinstance(path, str):
+        raise TypeError("invalid Gitleaks path")
+    candidate = Path(path)
+    candidate = candidate if candidate.is_absolute() else source / candidate
+    relative = str(candidate.resolve().relative_to(source.resolve()))
+    if (
+        relative not in selected
+        or not positive(row.get("StartLine"))
+        or not positive(row.get("StartColumn"))
+    ):
+        raise ValueError("Gitleaks location outside copied inventory")
+    # Secret, Match, Description, Fingerprint, and raw report rows never escape here.
+    return Finding(
+        "secret." + row["RuleID"],
+        "Potential credential detector match; review locally and rotate if confirmed",
+        "high",
+        relative,
+        row["StartLine"],
+        row["StartColumn"],
+        confidence="medium",
+    )
+
+
 def _gitleaks_findings(report: Path, source: Path, selected: set[str]) -> list[Finding]:
     rows = json.loads(report.read_text(encoding="utf-8"))
     if not isinstance(rows, list):
         raise TypeError("Gitleaks report must be a list")
-    findings = []
-    for row in rows:
-        if (
-            not isinstance(row, dict)
-            or not isinstance(row.get("RuleID"), str)
-            or not row["RuleID"]
-        ):
-            raise ValueError("invalid Gitleaks rule")
-        path = row.get("File")
-        if not isinstance(path, str):
-            raise TypeError("invalid Gitleaks path")
-        candidate = Path(path)
-        candidate = candidate if candidate.is_absolute() else source / candidate
-        relative = str(candidate.resolve().relative_to(source.resolve()))
-        if (
-            relative not in selected
-            or not natural(row.get("StartLine"))
-            or row["StartLine"] < 1
-            or not natural(row.get("StartColumn"))
-            or row["StartColumn"] < 1
-        ):
-            raise ValueError("Gitleaks location outside copied inventory")
-        # Secret, Match, Description, Fingerprint, and raw report rows never escape here.
-        findings.append(
-            Finding(
-                "secret." + row["RuleID"],
-                "Potential credential detector match; review locally and rotate if confirmed",
-                "high",
-                relative,
-                row["StartLine"],
-                row["StartColumn"],
-                confidence="medium",
-            )
-        )
+    return [_gitleaks_row(row, source, selected) for row in rows]
+
+
+def _copy_text(file, source):
+    if file.size_bytes > 1024 * 1024:
+        return False
+    text = file.path.read_text(encoding="utf-8")
+    if "\x00" in text:
+        return False
+    destination = source / file.relative_path
+    if not destination.resolve().is_relative_to(source.resolve()):
+        raise ValueError("inventory path escapes source view")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(text, encoding="utf-8")
+    return True
+
+
+def _source_view(files, source):
+    source.mkdir()
+    selected, skipped = set(), []
+    for file in files:
+        try:
+            if _copy_text(file, source):
+                selected.add(file.relative_path)
+            else:
+                skipped.append(file.relative_path)
+        except (OSError, UnicodeError, ValueError):
+            skipped.append(file.relative_path)
+    return selected, skipped
+
+
+def _invoke_gitleaks(ctx, binary, source, workspace, report):
+    config = Path(__file__).parent / "assets" / "gitleaks-v8.30.1.toml"
+    ignore = workspace / "empty-ignore"
+    ignore.write_text("", encoding="utf-8")
+    return ctx.run(
+        [
+            binary,
+            "dir",
+            str(source),
+            "--config",
+            str(config),
+            "--gitleaks-ignore-path",
+            str(ignore),
+            "--ignore-gitleaks-allow",
+            "--redact=100",
+            "--report-format",
+            "json",
+            "--report-path",
+            str(report),
+            "--no-banner",
+            "--no-color",
+            "--log-level",
+            "error",
+            "--max-decode-depth",
+            "0",
+            "--max-archive-depth",
+            "0",
+            "--max-target-megabytes",
+            "1",
+        ],
+        cwd=workspace,
+    )
+
+
+def _report_findings(result, report, source, selected):
+    findings = _gitleaks_findings(report, source, selected)
+    if (result.returncode == 0 and findings) or (
+        result.returncode == 1 and not findings
+    ):
+        raise ValueError("Gitleaks exit/report evidence inconsistent")
     return findings
 
 
@@ -160,79 +228,24 @@ def analyze_secrets(ctx: ScanContext) -> StageResult:
     binary = trusted_executable(ctx, "gitleaks")
     if not binary:
         return _analyze_patterns(ctx)
-    skipped = []
-    selected = set()
     with tempfile.TemporaryDirectory(prefix="gitleaks-", dir=ctx.scratch) as directory:
         workspace = Path(directory)
         source = workspace / "source"
-        source.mkdir()
-        for file in ctx.files:
-            if file.size_bytes > 1024 * 1024:
-                skipped.append(file.relative_path)
-                continue
-            try:
-                text = file.path.read_text(encoding="utf-8")
-                if "\x00" in text:
-                    skipped.append(file.relative_path)
-                    continue
-                destination = source / file.relative_path
-                if not destination.resolve().is_relative_to(source.resolve()):
-                    raise ValueError("inventory path escapes source view")
-                destination.parent.mkdir(parents=True, exist_ok=True)
-                destination.write_text(text, encoding="utf-8")
-                selected.add(file.relative_path)
-            except (OSError, UnicodeError, ValueError):
-                skipped.append(file.relative_path)
-        config = Path(__file__).parent / "assets" / "gitleaks-v8.30.1.toml"
-        ignore = workspace / "empty-ignore"
-        ignore.write_text("", encoding="utf-8")
+        selected, skipped = _source_view(ctx.files, source)
         report = workspace / "report.json"
-        result = ctx.run(
-            [
-                binary,
-                "dir",
-                str(source),
-                "--config",
-                str(config),
-                "--gitleaks-ignore-path",
-                str(ignore),
-                "--ignore-gitleaks-allow",
-                "--redact=100",
-                "--report-format",
-                "json",
-                "--report-path",
-                str(report),
-                "--no-banner",
-                "--no-color",
-                "--log-level",
-                "error",
-                "--max-decode-depth",
-                "0",
-                "--max-archive-depth",
-                "0",
-                "--max-target-megabytes",
-                "1",
-            ],
-            cwd=workspace,
-        )
-        if result.status != "ok" or result.returncode not in {0, 1}:
+        result = _invoke_gitleaks(ctx, binary, source, workspace, report)
+        if not valid_run(result, (0, 1)):
             return unavailable(
                 "security.secrets",
                 "Potential credential detector matches",
                 "security",
                 "gitleaks",
                 f"Controlled Gitleaks invocation {result.status}; exit {result.returncode}",
-                status=result.status
-                if result.status in {"missing", "timeout"}
-                else "failed",
+                status=failure_status(result),
                 eligible_files=len(ctx.files),
             )
         try:
-            findings = _gitleaks_findings(report, source, selected)
-            if (result.returncode == 0 and findings) or (
-                result.returncode == 1 and not findings
-            ):
-                raise ValueError("Gitleaks exit/report evidence inconsistent")
+            findings = _report_findings(result, report, source, selected)
         except (OSError, ValueError, TypeError):
             return unavailable(
                 "security.secrets",

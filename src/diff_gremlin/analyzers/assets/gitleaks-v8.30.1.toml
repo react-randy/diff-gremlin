@@ -1,7 +1,7 @@
 # Diff Gremlin controlled Gitleaks rules, upstream MIT.
 # Source: https://github.com/gitleaks/gitleaks/blob/83d9cd684c87d95d656c1458ef04895a7f1cbd8e/config/gitleaks.toml
 # Original SHA256: e163e53b9e7e8a8511e77271e2b323ed057759542a6d988258afe3a1fa329caf
-# Rules-only modified body SHA256: 0b60bc3d235f5043f83f008749e55faa59958d695713b7f3e8d69a1d37e6f333
+# Rules-only modified body SHA256: 54807ead6528f7c5d868db4017753560354d2a06081435c7d257057557271ff8
 # Only change: remove global allowlist.paths (25 patterns). All detection rules, entropy thresholds, rule allowlists, and stopwords retained.
 # This file has been auto-generated. Do not edit manually.
 # If you would like to contribute new rules, please use
@@ -3185,4 +3185,3 @@ id = "zendesk-secret-key"
 description = "Detected a Zendesk Secret Key, risking unauthorized access to customer support services and sensitive ticketing data."
 regex = '''(?i)[\w.-]{0,50}?(?:zendesk)(?:[ \t\w.-]{0,20})[\s'"]{0,3}(?:=|>|:{1,3}=|\|\||:|=>|\?=|,)[\x60'"\s=]{0,5}([a-z0-9]{40})(?:[\x60'"\s;]|\\[nr]|$)'''
 keywords = ["zendesk"]
-

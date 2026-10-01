@@ -4,12 +4,14 @@ import json
 import shutil
 from pathlib import Path
 
+from diff_gremlin.process import trusted_path
+
 from diff_gremlin.domain.context import ScanContext
 
 
 def trusted_executable(ctx: ScanContext, name: str) -> str | None:
-    """Reject executable paths supplied by the analyzed repository."""
-    candidate = shutil.which(name)
+    """Discover executables only in the shared trusted installed-tool search path."""
+    candidate = shutil.which(name, path=trusted_path(ctx.root))
     if not candidate:
         return None
     path = Path(candidate).resolve()

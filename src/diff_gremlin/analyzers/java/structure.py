@@ -1,38 +1,27 @@
 """Produce Java syntax-tree evidence using only the installed JDK parser."""
 
 import tempfile
+from dataclasses import replace
 from pathlib import Path
 
 from diff_gremlin.analyzers.status import unavailable
 from diff_gremlin.analyzers.versions import tool_version
 
 from diff_gremlin.analyzers.javascript.installed import trusted_executable
-from diff_gremlin.analyzers.javascript.output import evidence, located_findings, natural
+from diff_gremlin.analyzers.javascript.output import (
+    evidence,
+    failure_status,
+    located_findings,
+    natural,
+    valid_run,
+)
 from diff_gremlin.domain.context import ScanContext
 from diff_gremlin.domain.stages import StageResult
 
 _ID, _LABEL = "java.structure", "Java syntax and structure"
 
 
-def analyze_java_structure(ctx: ScanContext) -> StageResult:
-    files = tuple(file for file in ctx.production_files if file.language == "java")
-
-    def absent(reason, status="missing"):
-        return unavailable(
-            _ID,
-            _LABEL,
-            "structure",
-            "javac-parser",
-            reason,
-            status=status,
-            eligible_files=len(files),
-        )
-
-    if not files:
-        return absent("No Java production files", "skipped")
-    compiler, java = trusted_executable(ctx, "javac"), trusted_executable(ctx, "java")
-    if not compiler or not java:
-        return absent("Installed trusted JDK compiler/parser unavailable")
+def _observe(ctx, compiler, java, files):
     with tempfile.TemporaryDirectory(
         prefix="java-parser-", dir=ctx.scratch
     ) as directory:
@@ -55,11 +44,8 @@ def analyze_java_structure(ctx: ScanContext) -> StageResult:
             ],
             cwd=workspace,
         )
-        if build.status != "ok" or build.returncode != 0:
-            return absent(
-                f"Shipped JDK parser driver compilation {build.status}; exit {build.returncode}",
-                build.status if build.status in {"missing", "timeout"} else "failed",
-            )
+        if not valid_run(build):
+            return build
         result = ctx.run(
             [
                 java,
@@ -70,23 +56,49 @@ def analyze_java_structure(ctx: ScanContext) -> StageResult:
             ],
             cwd=workspace,
         )
-        if result.status != "ok" or result.returncode != 0:
-            return absent(
-                f"JDK syntax parsing {result.status}; exit {result.returncode}",
-                result.status if result.status in {"missing", "timeout"} else "failed",
-            )
-        try:
-            data = evidence(result.stdout, files)
-            if not all(
-                natural(data.get(k))
-                for k in ("type_count", "method_count", "error_count")
-            ):
-                raise ValueError("invalid structure counters")
-            findings = located_findings(data["findings"], files)
-        except (ValueError, TypeError):
-            return absent(
-                "JDK parser returned malformed or incomplete evidence", "failed"
-            )
+        return replace(
+            result, duration_seconds=result.duration_seconds + build.duration_seconds
+        )
+
+
+def _structure(stdout, files):
+    data = evidence(stdout, files)
+    if not all(
+        natural(data.get(k)) for k in ("type_count", "method_count", "error_count")
+    ):
+        raise ValueError("invalid structure counters")
+    return data, located_findings(data["findings"], files)
+
+
+def analyze_java_structure(ctx: ScanContext) -> StageResult:
+    files = tuple(file for file in ctx.production_files if file.language == "java")
+
+    def absent(reason, status="missing"):
+        return unavailable(
+            _ID,
+            _LABEL,
+            "structure",
+            "javac-parser",
+            reason,
+            status=status,
+            eligible_files=len(files),
+        )
+
+    if not files:
+        return absent("No Java production files", "skipped")
+    compiler, java = trusted_executable(ctx, "javac"), trusted_executable(ctx, "java")
+    if not compiler or not java:
+        return absent("Installed trusted JDK compiler/parser unavailable")
+    result = _observe(ctx, compiler, java, files)
+    if not valid_run(result):
+        return absent(
+            f"JDK syntax driver invocation {result.status}; exit {result.returncode}",
+            failure_status(result),
+        )
+    try:
+        data, findings = _structure(result.stdout, files)
+    except (ValueError, TypeError):
+        return absent("JDK parser returned malformed or incomplete evidence", "failed")
     return StageResult(
         _ID,
         _LABEL,
@@ -99,5 +111,5 @@ def analyze_java_structure(ctx: ScanContext) -> StageResult:
         reason="Syntax trees only; no dependency resolution or LSP diagnostics",
         analyzed_files=len(files),
         eligible_files=len(files),
-        duration_seconds=result.duration_seconds + build.duration_seconds,
+        duration_seconds=result.duration_seconds,
     )

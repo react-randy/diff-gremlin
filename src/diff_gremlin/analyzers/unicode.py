@@ -21,28 +21,38 @@ def _legitimate_joiner(text: str, index: int) -> bool:
     return (emoji(before) and emoji(after)) or (letters(before) and letters(after))
 
 
-def _control_rule(text: str, index: int) -> tuple[str, str] | None:
-    code = ord(text[index])
-    if code in _BIDI:
-        return "unicode.bidi-control", "high" if code in {0x202D, 0x202E} else "medium"
-    if 0xE0001 <= code <= 0xE007F and not any(
-        ord(char) >= 0x1F000 and ord(char) < 0xE0000
-        for char in text[max(0, index - 12) : index]
-    ):
+def _unexpected_tag(text, index):
+    return not any(
+        0x1F000 <= ord(char) < 0xE0000 for char in text[max(0, index - 12) : index]
+    )
+
+
+def _unexpected_variation(text, index):
+    return index == 0 or ord(text[index - 1]) < 128
+
+
+def _contextual_control(text, index, code):
+    if 0xE0001 <= code <= 0xE007F and _unexpected_tag(text, index):
         return "unicode.unexpected-tag", "low"
-    if code == 0x00AD:
-        return "unicode.soft-hyphen", "info"
-    if code in _HIDDEN:
-        return "unicode.invisible-control", "low"
     if code in {0x200C, 0x200D} and not _legitimate_joiner(text, index):
         return "unicode.unexpected-joiner", "low"
     if code == 0xFEFF and index != 0:
         return "unicode.misplaced-bom", "low"
-    if (0xFE00 <= code <= 0xFE0F or 0xE0100 <= code <= 0xE01EF) and (
-        index == 0 or ord(text[index - 1]) < 128
-    ):
+    variation = 0xFE00 <= code <= 0xFE0F or 0xE0100 <= code <= 0xE01EF
+    if variation and _unexpected_variation(text, index):
         return "unicode.unexpected-variation-selector", "low"
     return None
+
+
+def _control_rule(text: str, index: int) -> tuple[str, str] | None:
+    code = ord(text[index])
+    if code in _BIDI:
+        return "unicode.bidi-control", "high" if code in {0x202D, 0x202E} else "medium"
+    if code == 0x00AD:
+        return "unicode.soft-hyphen", "info"
+    if code in _HIDDEN:
+        return "unicode.invisible-control", "low"
+    return _contextual_control(text, index, code)
 
 
 def analyze_unicode(ctx: ScanContext) -> StageResult:

@@ -1,11 +1,11 @@
 """Contextual Unicode/execution and redacted credential-pattern controls."""
 
-import os
 import shutil
 import subprocess
 from dataclasses import replace
 
 import pytest
+from diff_gremlin.process import trusted_path
 
 from diff_gremlin.analyzers.execution import analyze_execution
 from diff_gremlin.analyzers.secrets import _analyze_patterns, analyze_secrets
@@ -18,7 +18,7 @@ def runner(command, *, cwd, timeout, **kwargs):
     result = subprocess.run(
         command,
         cwd=cwd,
-        env={"PATH": os.environ["PATH"], "LANG": "C.UTF-8", "HOME": str(cwd)},
+        env={"PATH": trusted_path(cwd), "LANG": "C.UTF-8", "HOME": str(cwd)},
         capture_output=True,
         text=True,
         timeout=timeout,
@@ -403,3 +403,49 @@ def test_direct_commonjs_process_call_is_parser_backed(context):
     )
     assert result.status == "ok" and result.metrics["actionable_count"] == 1
     assert result.findings[0].rule == "javascript.shell-execution"
+
+
+def test_python_lexical_owners_do_not_hide_builtin_eval_in_another_function(context):
+    source = """def real():
+    return eval("1+1")
+def decoy(eval):
+    return eval("plain local function")
+"""
+    result = analyze_execution(context([("a.py", "python", source)]))
+    calls = [f for f in result.findings if f.rule == "python.eval"]
+    assert len(calls) == 1 and calls[0].line == 2
+
+
+def test_python_comprehension_bindings_do_not_hide_outer_builtin_eval(context):
+    source = """local = [eval("safe local") for eval in callbacks]
+value = eval("1+1")
+"""
+    result = analyze_execution(context([("a.py", "python", source)]))
+    calls = [f for f in result.findings if f.rule == "python.eval"]
+    assert len(calls) == 1 and calls[0].line == 2
+
+
+def test_java_safe_process_and_explicit_shell_calls_have_distinct_severity(context):
+    if not shutil.which("javac") or not shutil.which("java"):
+        pytest.skip("Actual installed JDK parser required")
+    source = """class Main {
+      void run() throws Exception {
+        Runtime.getRuntime().exec(new String[]{"echo", "safe"});
+        Runtime.getRuntime().exec(new String[]{"/bin/sh", "-c", "echo safe"});
+        new ProcessBuilder("bash", "-c", "echo safe");
+        Unsafe.getUnsafe(); Class.forName("java.lang.String");
+      }
+    }"""
+    result = analyze_execution(context([("Main.java", "java", source)]))
+    assert result.status == "ok"
+    assert any(
+        f.rule == "java.runtime-exec" and f.severity == "info" for f in result.findings
+    )
+    assert {f.line for f in result.findings if f.rule == "java.shell-execution"} == {
+        4,
+        5,
+    }
+    assert {"java.unsafe-api", "java.reflective-load"} <= {
+        f.rule for f in result.findings
+    }
+    assert result.metrics["actionable_count"] == 2

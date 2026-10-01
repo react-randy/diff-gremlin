@@ -5,7 +5,7 @@ const path = require('node:path');
 const [eslintPath, parserPath, pluginPath, globalsPath, ...files] = process.argv.slice(2);
 const {ESLint} = require(eslintPath);
 const parser = require(path.join(parserPath, 'dist', 'index.js'));
-const plugin = require(path.join(pluginPath, 'dist', 'index.js')); 
+const plugin = require(path.join(pluginPath, 'dist', 'index.js'));
 const globals = require(globalsPath);
 const inherited = {
   'no-unused-vars': 'off', '@typescript-eslint/no-unused-vars': 'error',
@@ -26,7 +26,7 @@ const inherited = {
 (async () => {
   const installedRequire = createRequire(path.join(eslintPath, 'package.json'));
   const recommended = installedRequire('@eslint/js').configs.recommended.rules;
-  const eslint = new ESLint({cwd: process.cwd(), overrideConfigFile: true, ignore: false,
+  const eslint = new ESLint({cwd: process.cwd(), overrideConfigFile: true, ignore: false, allowInlineConfig: false,
     overrideConfig: [{files: ['**/*.{js,jsx,mjs,cjs,ts,tsx,mts,cts}'],
       languageOptions: {parser, ecmaVersion: 'latest', sourceType: 'module',
         globals: {...globals.es2022, ...globals.node, ...globals.browser},
