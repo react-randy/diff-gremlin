@@ -34,7 +34,7 @@ def _diagnostics(stdout, files):
         )
     ):
         raise ValueError("invalid diagnostic counts")
-    findings = located_findings(data["findings"], files)
+    findings = located_findings(data["findings"], files, kind="typescript")
     if (
         len(findings) + data["global_count"]
         != data["error_count"] + data["warning_count"]
@@ -91,9 +91,9 @@ def analyze_ts_types(ctx: ScanContext) -> StageResult:
         )
     try:
         data, findings = _diagnostics(result.stdout, files)
-    except (ValueError, TypeError):
+    except (ValueError, TypeError) as error:
         return absent(
-            "Controlled TypeScript returned malformed or incomplete evidence",
+            f"Controlled TypeScript evidence invalid: {error}",
             status="failed",
         )
     limited = _type_limit(data)

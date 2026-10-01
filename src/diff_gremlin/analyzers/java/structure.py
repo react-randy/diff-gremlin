@@ -67,7 +67,7 @@ def _structure(stdout, files):
         natural(data.get(k)) for k in ("type_count", "method_count", "error_count")
     ):
         raise ValueError("invalid structure counters")
-    return data, located_findings(data["findings"], files)
+    return data, located_findings(data["findings"], files, kind="jdk")
 
 
 def analyze_java_structure(ctx: ScanContext) -> StageResult:
@@ -90,10 +90,8 @@ def analyze_java_structure(ctx: ScanContext) -> StageResult:
         )
     try:
         data, findings = _structure(result.stdout, files)
-    except (ValueError, TypeError):
-        return absent(
-            "JDK parser returned malformed or incomplete evidence", status="failed"
-        )
+    except (ValueError, TypeError) as error:
+        return absent(f"JDK parser evidence invalid: {error}", status="failed")
     return StageResult(
         _ID,
         _LABEL,

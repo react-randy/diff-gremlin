@@ -6,11 +6,14 @@ from functools import partial
 from pathlib import Path
 
 from diff_gremlin.analyzers.javascript.installed import trusted_executable
-from diff_gremlin.analyzers.javascript.output import failure_status, valid_run
+from diff_gremlin.analyzers.javascript.output import (
+    failure_status,
+    located_findings,
+    valid_run,
+)
 from diff_gremlin.analyzers.status import unavailable
 from diff_gremlin.analyzers.versions import tool_version
 from diff_gremlin.domain.context import ScanContext
-from diff_gremlin.domain.findings import Finding
 from diff_gremlin.domain.stages import StageResult
 
 _ID, _LABEL = "java.types", "Java standalone static types"
@@ -47,10 +50,10 @@ def _invoke(ctx, compiler, files):
 
 
 def _source_paths(files):
-    paths = {str(f.path.resolve()): f.relative_path for f in files}
+    paths = {str(f.path.resolve()): str(f.path.resolve()) for f in files}
     # javac commonly emits just the basename despite absolute source argv.
     names = {
-        f.path.name: f.relative_path
+        f.path.name: str(f.path.resolve())
         for f in files
         if sum(g.path.name == f.path.name for g in files) == 1
     }
@@ -68,18 +71,17 @@ def _diagnostic(line, paths, names):
             raise ValueError("unrecognized javac output")
         return None
     path, lineno, column, rule = match.groups()
-    relative = paths.get(path) or names.get(path)
-    if not relative:
+    source = paths.get(path) or names.get(path)
+    if not source:
         raise ValueError("javac diagnostic could not be tied to selected source")
     severity = "medium" if rule.startswith("compiler.err.") else "low"
-    return Finding(
-        rule,
-        f"Review javac {rule} diagnostic",
-        severity,
-        relative,
-        int(lineno),
-        int(column),
-    )
+    return {
+        "path": source,
+        "rule": rule,
+        "severity": severity,
+        "line": int(lineno),
+        "column": int(column),
+    }
 
 
 def _counts(findings):
@@ -98,7 +100,9 @@ def _diagnostics(result, files):
         _diagnostic(line, paths, names)
         for line in (result.stdout + result.stderr).splitlines()
     )
-    findings = [finding for finding in observations if finding is not None]
+    findings = located_findings(
+        [row for row in observations if row is not None], files, kind="javac"
+    )
     errors, warnings, dependency_count = _counts(findings)
     if (result.returncode == 1 and not errors) or (result.returncode == 0 and errors):
         raise ValueError("javac exit/diagnostic evidence inconsistent")
@@ -125,9 +129,9 @@ def analyze_java_types(ctx: ScanContext) -> StageResult:
         )
     try:
         findings, errors, warnings, dependency_count = _diagnostics(result, files)
-    except ValueError:
+    except ValueError as error:
         return absent(
-            "javac exit/diagnostic evidence inconsistent, unrecognized or outside selected source",
+            f"javac diagnostic evidence invalid: {error}",
             status="failed",
         )
     limited = dependency_count > 0

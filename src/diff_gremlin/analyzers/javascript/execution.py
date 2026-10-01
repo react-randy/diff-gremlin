@@ -44,5 +44,5 @@ def observe_javascript_calls(
             len(files),
             "JS/TS syntax errors limit calls" if data["parse_errors"] else "",
         )
-    except (ValueError, TypeError):
-        return [], 0, "JS/TS parser output malformed or incomplete"
+    except (ValueError, TypeError) as error:
+        return [], 0, f"JS/TS parser evidence invalid: {error}"

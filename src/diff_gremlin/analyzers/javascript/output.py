@@ -3,6 +3,10 @@
 import json
 from typing import TypeGuard
 
+from diff_gremlin.analyzers.javascript.coordinates import (
+    CoordinateKind,
+    SourceCoordinates,
+)
 from diff_gremlin.domain.context import SourceFile
 from diff_gremlin.domain.findings import Finding
 from diff_gremlin.domain.process import RunResult
@@ -38,7 +42,12 @@ def evidence(stdout: str, files: tuple[SourceFile, ...]) -> dict:
     return data
 
 
-def _located_row(row: dict, paths: dict[str, str]) -> Finding:
+def _located_row(
+    row: dict,
+    paths: dict[str, str],
+    coordinates: SourceCoordinates,
+    kind: CoordinateKind,
+) -> Finding:
     if not isinstance(row, dict) or row.get("path") not in paths:
         raise ValueError("finding path outside requested inventory")
     if not positive(row.get("line")) or not positive(row.get("column")):
@@ -50,6 +59,8 @@ def _located_row(row: dict, paths: dict[str, str]) -> Finding:
         or severity not in {"info", "low", "medium", "high", "critical"}
     ):
         raise ValueError("invalid finding rule or severity")
+    native_kind = "javac" if kind == "jdk" and rule == "java.syntax" else kind
+    coordinates.validate(row["path"], row["line"], row["column"], native_kind)
     return Finding(
         rule=rule,
         message=f"Review {rule} diagnostic",
@@ -60,7 +71,10 @@ def _located_row(row: dict, paths: dict[str, str]) -> Finding:
     )
 
 
-def located_findings(rows: list, files: tuple[SourceFile, ...]) -> list[Finding]:
+def located_findings(
+    rows: list, files: tuple[SourceFile, ...], *, kind: CoordinateKind = "javascript"
+) -> list[Finding]:
     """Use generated messages because source diagnostics may contain credentials."""
     paths = {str(file.path.resolve()): file.relative_path for file in files}
-    return [_located_row(row, paths) for row in rows]
+    coordinates = SourceCoordinates()
+    return [_located_row(row, paths, coordinates, kind) for row in rows]

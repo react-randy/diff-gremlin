@@ -29,7 +29,7 @@ def _diagnostics(stdout, files):
         natural(data.get(k)) for k in ("error_count", "warning_count", "fatal_count")
     ):
         raise ValueError("invalid diagnostic counts")
-    findings = located_findings(data["findings"], files)
+    findings = located_findings(data["findings"], files, kind="eslint")
     if len(findings) != data["error_count"] + data["warning_count"]:
         raise ValueError("diagnostic counts differ from findings")
     return data, findings
@@ -90,9 +90,9 @@ def analyze_js_lint(ctx: ScanContext) -> StageResult:
         )
     try:
         data, findings = _diagnostics(result.stdout, files)
-    except (ValueError, TypeError):
+    except (ValueError, TypeError) as error:
         return absent(
-            "Controlled ESLint returned malformed or incomplete evidence",
+            f"Controlled ESLint evidence invalid: {error}",
             status="failed",
         )
     return StageResult(
