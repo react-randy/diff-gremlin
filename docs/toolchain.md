@@ -139,6 +139,25 @@ correctness rules; TypeScript rules apply to TypeScript. Binding observations
 remain a syntax approximation without flow, runtime reachability or inter-file
 analysis. Complete source parsing does not make those observations exhaustive.
 
+Python execution observations include eager function/lambda defaults and class
+keyword expressions. Comprehension targets own inner expressions; only the first
+iterable uses the enclosing scope. These are lexical observations, including
+possible unbound locals; they do not establish whether a call can run.
+
+Java distinguishes `Runtime.exec(String)` tokenization from `ProcessBuilder`
+command vectors. A single builder string is one program name. Recognized literal
+shell command options are review points; dynamic arguments, unsupported options,
+script operands and runtime reachability remain unresolved. Windows interpreter
+forms have static fixture coverage, without a claim of Windows runtime testing.
+
+Located JS/TS and JDK diagnostics must fit the invocation's copied source. Each
+located report has one cumulative 4-MiB source-read budget. JavaScript coordinates
+use UTF-16 units and native line separators; compiler/lint BOM handling is distinct
+from the syntax observer. JDK columns include eight-column tab stops, with
+separate tree and diagnostic EOF conventions. Unreadable sources, invalid
+coordinates and exhausted budgets lose coverage; validating an extent does not
+prove the diagnostic's meaning.
+
 ## Trusted executable discovery
 
 Analyzer discovery uses the installed Python interpreter's directory, system
