@@ -50,33 +50,41 @@ class _PythonCalls(ast.NodeVisitor):
     def visit_Module(self, node):
         self._scope(node.body)
 
-    def visit_FunctionDef(self, node):
-        for expression in (
-            *node.decorator_list,
-            *node.args.defaults,
-            *node.args.kw_defaults,
-        ):
+    def _visit_defaults(self, arguments):
+        for expression in (*arguments.defaults, *arguments.kw_defaults):
             if expression is not None:
                 self.visit(expression)
+
+    def visit_FunctionDef(self, node):
+        for expression in node.decorator_list:
+            self.visit(expression)
+        self._visit_defaults(node.args)
         self._scope(node.body, _parameters(node.args))
 
     visit_AsyncFunctionDef = visit_FunctionDef
 
     def visit_ClassDef(self, node):
-        for expression in (*node.decorator_list, *node.bases):
+        for expression in (
+            *node.decorator_list,
+            *node.bases,
+            *(keyword.value for keyword in node.keywords),
+        ):
             self.visit(expression)
         self._scope(node.body, is_class=True)
 
     def visit_Lambda(self, node):
+        self._visit_defaults(node.args)
         self._scope([node.body], _parameters(node.args))
 
     def _comprehension(self, node):
         bindings = _Bindings()
         for generator in node.generators:
-            self.visit(generator.iter)
             bindings.visit(generator.target)
+        self.visit(node.generators[0].iter)
         self.scopes.append(_Scope(bindings))
-        for generator in node.generators:
+        for index, generator in enumerate(node.generators):
+            if index:
+                self.visit(generator.iter)
             for condition in generator.ifs:
                 self.visit(condition)
         expressions = (
