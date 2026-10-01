@@ -109,7 +109,8 @@ def _type_stage(
     duration: float,
 ) -> StageResult:
     unresolved = any(
-        finding.rule in ("pyrefly.import-error", "pyrefly.missing-import") for finding in findings
+        finding.rule in ("pyrefly.import-error", "pyrefly.missing-import")
+        for finding in findings
     )
     return StageResult(
         _ID,
@@ -125,7 +126,9 @@ def _type_stage(
             "dependency_resolution": "snapshot-bundled-typeshed-and-installed-tool-environment",
         },
         findings=findings,
-        reason="Imports unavailable in the static tool environment" if unresolved else "",
+        reason="Imports unavailable in the static tool environment"
+        if unresolved
+        else "",
         eligible_files=len(files),
         analyzed_files=len(files),
         duration_seconds=duration,
@@ -142,14 +145,20 @@ def analyze_python_types(ctx: ScanContext) -> StageResult:
     try:
         result = _run_pyrefly(ctx, files)
     except OSError:
-        return failure(reason="Could not create controlled Pyrefly configuration", status="failed")
+        return failure(
+            reason="Could not create controlled Pyrefly configuration", status="failed"
+        )
     status = execution_status(result, (0, 1))
     if status is not None:
-        return failure(reason="Pyrefly execution did not complete valid analysis", status=status)
+        return failure(
+            reason="Pyrefly execution did not complete valid analysis", status=status
+        )
     try:
         findings, errors, warnings = _diagnostics(ctx, files, result.stdout)
         if (result.returncode == 1) != bool(errors):
             raise ValueError("Pyrefly exit status disagrees with error count")
     except (ValueError, TypeError):
-        return failure(reason="Pyrefly output failed diagnostic schema validation", status="failed")
+        return failure(
+            reason="Pyrefly output failed diagnostic schema validation", status="failed"
+        )
     return _type_stage(ctx, files, findings, errors, warnings, result.duration_seconds)

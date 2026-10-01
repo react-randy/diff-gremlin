@@ -19,10 +19,17 @@ _SPEC.loader.exec_module(helper)
 
 def verified_inputs(monkeypatch):
     """Replace network data with independent digests rather than bypassing verification."""
-    executable, license_text = b"verified executable fixture", b"verified license fixture"
+    executable, license_text = (
+        b"verified executable fixture",
+        b"verified license fixture",
+    )
     monkeypatch.setattr(helper, "artifact_name", lambda: "linux_amd64")
-    monkeypatch.setitem(helper.ARTIFACTS, "linux_amd64", hashlib.sha256(executable).hexdigest())
-    monkeypatch.setattr(helper, "LICENSE_SHA256", hashlib.sha256(license_text).hexdigest())
+    monkeypatch.setitem(
+        helper.ARTIFACTS, "linux_amd64", hashlib.sha256(executable).hexdigest()
+    )
+    monkeypatch.setattr(
+        helper, "LICENSE_SHA256", hashlib.sha256(license_text).hexdigest()
+    )
     calls = []
 
     def download(url, limit):
@@ -50,7 +57,10 @@ def test_reviewed_platform_mapping(monkeypatch, system, machine, expected):
 
 def test_unsupported_platform_fails_before_download(monkeypatch, tmp_path):
     monkeypatch.setattr(helper.platform, "system", lambda: "Windows")
-    with patch.object(helper, "download") as download, pytest.raises(ValueError, match="support"):
+    with (
+        patch.object(helper, "download") as download,
+        pytest.raises(ValueError, match="support"),
+    ):
         helper.provision(tmp_path / "bin")
     download.assert_not_called()
     assert not (tmp_path / "bin").exists()
@@ -63,7 +73,9 @@ def test_exact_reviewed_hash_manifest_and_license_asset():
         "darwin_amd64": "d33eee0da0f92835b3562e9767a05cee7e4eaeef47daa03bfd09da17b4b590a6",
         "darwin_arm64": "b7c872db63553ccffc7253aba3ed7d4885a27d83f1ba567b1138c6315a5847e5",
     }
-    license_text = (_ROOT / "src/diff_gremlin/analyzers/shell/assets/SHFMT-LICENSE").read_bytes()
+    license_text = (
+        _ROOT / "src/diff_gremlin/analyzers/shell/assets/SHFMT-LICENSE"
+    ).read_bytes()
     assert hashlib.sha256(license_text).hexdigest() == helper.LICENSE_SHA256
     assert b"Daniel" in license_text and b"Redistribution" in license_text
 
@@ -91,7 +103,10 @@ def test_both_assets_verified_before_executable_write(monkeypatch, tmp_path):
     assert (destination / "shfmt").read_bytes() == executable
     assert (destination / "shfmt").stat().st_mode & 0o777 == 0o755
     assert (destination / "SHFMT-LICENSE").read_bytes() == license_text
-    assert helper.COMMIT in calls[1][0] and "v3.14.1/shfmt_v3.14.1_linux_amd64" in calls[0][0]
+    assert (
+        helper.COMMIT in calls[1][0]
+        and "v3.14.1/shfmt_v3.14.1_linux_amd64" in calls[0][0]
+    )
     assert calls[0][1] == 8 * 1024 * 1024 and calls[1][1] == 64 * 1024
     assert not list(destination.glob(".shfmt-*"))
 
@@ -109,10 +124,15 @@ class Response(io.BytesIO):
 
 @pytest.mark.parametrize(
     "data,url,message",
-    [(b"x" * 11, "https://github.com/official", "byte limit"), (b"x", "http://unsafe", "HTTPS")],
+    [
+        (b"x" * 11, "https://github.com/official", "byte limit"),
+        (b"x", "http://unsafe", "HTTPS"),
+    ],
 )
 def test_download_caps_and_https(monkeypatch, data, url, message):
-    monkeypatch.setattr(helper.urllib.request, "urlopen", lambda *a, **k: Response(data, url))
+    monkeypatch.setattr(
+        helper.urllib.request, "urlopen", lambda *a, **k: Response(data, url)
+    )
     with pytest.raises(ValueError, match=message):
         helper.download("https://github.com/official", 10)
 
@@ -130,7 +150,9 @@ def test_download_timeout_is_explicit(monkeypatch):
     assert calls == [{"timeout": 60}]
 
 
-def test_partial_publication_error_keeps_old_binary_and_cleans_staging(monkeypatch, tmp_path):
+def test_partial_publication_error_keeps_old_binary_and_cleans_staging(
+    monkeypatch, tmp_path
+):
     verified_inputs(monkeypatch)
     (tmp_path / "shfmt").write_bytes(b"old executable")
     original_replace = Path.replace
@@ -141,7 +163,9 @@ def test_partial_publication_error_keeps_old_binary_and_cleans_staging(monkeypat
         return original_replace(path, destination)
 
     monkeypatch.setattr(Path, "replace", replace_file)
-    with pytest.raises(OSError, match="license published; executable publication incomplete"):
+    with pytest.raises(
+        OSError, match="license published; executable publication incomplete"
+    ):
         helper.provision(tmp_path)
     assert (tmp_path / "shfmt").read_bytes() == b"old executable"
     assert not list(tmp_path.glob(".shfmt-*"))
@@ -161,7 +185,9 @@ def test_provisioner_is_standalone():
     import ast
 
     tree = ast.parse((_ROOT / "scripts/provision_shfmt.py").read_text())
-    modules = [node.module or "" for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)]
+    modules = [
+        node.module or "" for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)
+    ]
     modules.extend(
         alias.name
         for node in ast.walk(tree)

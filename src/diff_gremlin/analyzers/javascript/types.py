@@ -35,7 +35,10 @@ def _diagnostics(stdout, files):
     ):
         raise ValueError("invalid diagnostic counts")
     findings = located_findings(data["findings"], files)
-    if len(findings) + data["global_count"] != data["error_count"] + data["warning_count"]:
+    if (
+        len(findings) + data["global_count"]
+        != data["error_count"] + data["warning_count"]
+    ):
         raise ValueError("incomplete diagnostic counts")
     return data, findings
 
@@ -58,9 +61,13 @@ def _type_limit(data):
 
 
 def analyze_ts_types(ctx: ScanContext) -> StageResult:
-    files = tuple(file for file in ctx.production_files if file.language == "typescript")
+    files = tuple(
+        file for file in ctx.production_files if file.language == "typescript"
+    )
 
-    absent = partial(unavailable, _ID, _LABEL, "types", "tsc", eligible_files=len(files))
+    absent = partial(
+        unavailable, _ID, _LABEL, "types", "tsc", eligible_files=len(files)
+    )
 
     if not files:
         return absent("No TypeScript production files", status="skipped")
@@ -86,7 +93,8 @@ def analyze_ts_types(ctx: ScanContext) -> StageResult:
         data, findings = _diagnostics(result.stdout, files)
     except (ValueError, TypeError):
         return absent(
-            "Controlled TypeScript returned malformed or incomplete evidence", status="failed"
+            "Controlled TypeScript returned malformed or incomplete evidence",
+            status="failed",
         )
     limited = _type_limit(data)
     return StageResult(

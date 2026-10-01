@@ -15,9 +15,13 @@ def main(paths: list[str]) -> int:
     rows = {}
     try:
         for path in paths:
-            rows[path] = {"mi": mi_visit(Path(path).read_text(encoding="utf-8"), multi=True)}
+            rows[path] = {
+                "mi": mi_visit(Path(path).read_text(encoding="utf-8"), multi=True)
+            }
     except (OSError, UnicodeError, SyntaxError, ValueError):
-        print("Radon maintainability analysis failed for an input file", file=sys.stderr)
+        print(
+            "Radon maintainability analysis failed for an input file", file=sys.stderr
+        )
         return 2
     print(json.dumps({"version": __version__, "files": rows}, allow_nan=False))
     return 0

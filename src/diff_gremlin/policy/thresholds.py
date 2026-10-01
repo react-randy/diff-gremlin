@@ -29,6 +29,10 @@ def grade(score: float | None) -> str:
     if score is None:
         return "?"
     return next(
-        (label for floor, label in ((90, "A"), (80, "B"), (70, "C"), (60, "D")) if score >= floor),
+        (
+            label
+            for floor, label in ((90, "A"), (80, "B"), (70, "C"), (60, "D"))
+            if score >= floor
+        ),
         "F",
     )

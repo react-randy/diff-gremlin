@@ -25,7 +25,9 @@ _ID, _LABEL = "javascript.lint.eslint", "JavaScript/TypeScript lint"
 
 def _diagnostics(stdout, files):
     data = evidence(stdout, files)
-    if not all(natural(data.get(k)) for k in ("error_count", "warning_count", "fatal_count")):
+    if not all(
+        natural(data.get(k)) for k in ("error_count", "warning_count", "fatal_count")
+    ):
         raise ValueError("invalid diagnostic counts")
     findings = located_findings(data["findings"], files)
     if len(findings) != data["error_count"] + data["warning_count"]:
@@ -53,10 +55,14 @@ def _lint_environment(ctx):
 
 def analyze_js_lint(ctx: ScanContext) -> StageResult:
     files = tuple(
-        file for file in ctx.production_files if file.language in {"javascript", "typescript"}
+        file
+        for file in ctx.production_files
+        if file.language in {"javascript", "typescript"}
     )
 
-    absent = partial(unavailable, _ID, _LABEL, "lint", "eslint", eligible_files=len(files))
+    absent = partial(
+        unavailable, _ID, _LABEL, "lint", "eslint", eligible_files=len(files)
+    )
 
     if not files:
         return absent("No JavaScript or TypeScript production files", status="skipped")
@@ -86,7 +92,8 @@ def analyze_js_lint(ctx: ScanContext) -> StageResult:
         data, findings = _diagnostics(result.stdout, files)
     except (ValueError, TypeError):
         return absent(
-            "Controlled ESLint returned malformed or incomplete evidence", status="failed"
+            "Controlled ESLint returned malformed or incomplete evidence",
+            status="failed",
         )
     return StageResult(
         _ID,

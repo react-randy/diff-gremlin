@@ -37,7 +37,9 @@ def _review_path(path: str) -> tuple[str, str, int, str]:
         number, provider = int(gitlab[2]), "gitlab"
         path = f"/{project}/-/merge_requests/{number}"
     else:
-        raise ValueError("Review URL must identify a GitHub pull request or GitLab merge request")
+        raise ValueError(
+            "Review URL must identify a GitHub pull request or GitLab merge request"
+        )
     return provider, project, number, path
 
 
@@ -53,7 +55,9 @@ def repository_url(url: object, host: str, project: str | None = None) -> str:
     parsed = repository_location(url, host)
     slug = parsed.path.strip("/").removesuffix(".git")
     if project is not None and slug.lower() != project.lower():
-        raise RuntimeError("Provider repository identity does not match the requested project")
+        raise RuntimeError(
+            "Provider repository identity does not match the requested project"
+        )
     if not valid_project(slug):
         raise RuntimeError("Provider repository project path is invalid")
     return f"https://{host}/{slug}.git"

@@ -65,7 +65,9 @@ def make_context(tmp_path, runner, sources=None):
     scratch = tmp_path / "scratch"
     scratch.mkdir(exist_ok=True)
     sources = (
-        {"a.py": "def square(x: int) -> int:\n    return x * x\n"} if sources is None else sources
+        {"a.py": "def square(x: int) -> int:\n    return x * x\n"}
+        if sources is None
+        else sources
     )
     files = []
     for relative, content in sources.items():
@@ -74,7 +76,9 @@ def make_context(tmp_path, runner, sources=None):
         path.write_text(content)
         language = "python" if path.suffix == ".py" else "java"
         files.append(SourceFile(path, relative, language, False, path.stat().st_size))
-    return ScanContext(root, tuple(files), tuple(files), ("python",), "full", 30, scratch, runner)
+    return ScanContext(
+        root, tuple(files), tuple(files), ("python",), "full", 30, scratch, runner
+    )
 
 
 def pyscn_data():
@@ -248,7 +252,9 @@ def test_pyscn_zero_is_known_and_one_analysis_supplies_three_stages(tmp_path):
     assert stages[2].metrics == {"issue_count": 0}
     assert sum("analyze" in command for command, _ in runner.calls) == 1
     command, kwargs = runner.calls[0]
-    assert command[command.index("--output") + 1] == "-" and kwargs["cwd"] == ctx.scratch
+    assert (
+        command[command.index("--output") + 1] == "-" and kwargs["cwd"] == ctx.scratch
+    )
 
 
 def test_pyscn_stale_artifact_ignored(tmp_path):
@@ -268,7 +274,9 @@ def test_pyscn_stale_artifact_ignored(tmp_path):
         ("health_score", float("nan")),
     ],
 )
-def test_pyscn_invalid_health_does_not_invalidate_independent_clones(tmp_path, field, value):
+def test_pyscn_invalid_health_does_not_invalidate_independent_clones(
+    tmp_path, field, value
+):
     data = pyscn_data()
     data["summary"][field] = value
     stages = analyze_pyscn(make_context(tmp_path, FakeRunner(json.dumps(data))))
@@ -320,15 +328,23 @@ def test_pyscn_component_failure_keeps_unknown(tmp_path):
     data["clone"]["success"] = False
     stages = analyze_pyscn(make_context(tmp_path, FakeRunner(json.dumps(data))))
     assert (
-        stages[0].status == "failed" and stages[1].status == "failed" and stages[2].status == "ok"
+        stages[0].status == "failed"
+        and stages[1].status == "failed"
+        and stages[2].status == "ok"
     )
 
 
 def test_radon_informational_and_missing_file_unknown(tmp_path):
     stage = analyze_maintainability(
-        make_context(tmp_path, FakeRunner('{"version": "6.0.1", "files": {"a.py": {"mi": 0}}}'))
+        make_context(
+            tmp_path, FakeRunner('{"version": "6.0.1", "files": {"a.py": {"mi": 0}}}')
+        )
     )
-    assert stage.status == "ok" and stage.metrics == {"average_mi": 0.0} and not stage.required
+    assert (
+        stage.status == "ok"
+        and stage.metrics == {"average_mi": 0.0}
+        and not stage.required
+    )
     stage = analyze_maintainability(make_context(tmp_path, FakeRunner("{}")))
     assert stage.status == "failed" and not stage.metrics
 
@@ -394,7 +410,11 @@ def test_native_pyscn_positive_clones_deadcode_and_nonmutation(tmp_path):
     if shutil.which("pyscn") is None:
         pytest.skip("optional native pilot requires installed pyscn")
     body = "".join(f"    result += value * {n}\n" for n in range(1, 16))
-    source = "def compute(value: int) -> int:\n    result = 0\n" + body + "    return result\n"
+    source = (
+        "def compute(value: int) -> int:\n    result = 0\n"
+        + body
+        + "    return result\n"
+    )
     sources = {
         "a.py": source,
         "b.py": source,
@@ -411,8 +431,14 @@ def test_native_pyscn_positive_clones_deadcode_and_nonmutation(tmp_path):
     assert all(stage.status == "ok" for stage in stages), [
         (stage.id, stage.reason) for stage in stages
     ]
-    assert stages[1].metrics["clone_groups"] >= 1 and stages[1].metrics["duplication_percent"] > 0
-    assert stages[2].metrics["issue_count"] >= 1 and stages[2].findings[0].path == "dead.py"
+    assert (
+        stages[1].metrics["clone_groups"] >= 1
+        and stages[1].metrics["duplication_percent"] > 0
+    )
+    assert (
+        stages[2].metrics["issue_count"] >= 1
+        and stages[2].findings[0].path == "dead.py"
+    )
     after = {
         path.relative_to(ctx.root): path.read_bytes()
         for path in ctx.root.rglob("*")
@@ -435,7 +461,9 @@ def test_native_pyscn_positive_clones_deadcode_and_nonmutation(tmp_path):
 def test_native_pyrefly_representative_error_controls(tmp_path, source, expected_rule):
     if shutil.which("pyrefly") is None:
         pytest.skip("optional native pilot requires installed pyrefly")
-    result = analyze_python_types(make_context(tmp_path, native_runner, {"a.py": source}))
+    result = analyze_python_types(
+        make_context(tmp_path, native_runner, {"a.py": source})
+    )
     assert result.status == "ok" and result.metrics["error_count"] >= 1
     assert any(finding.rule == expected_rule for finding in result.findings)
 
@@ -469,7 +497,9 @@ def test_pyscn_partial_coverage_is_visible(tmp_path):
     )
     stages = analyze_pyscn(ctx)
     assert all(
-        stage.status == "limited" and stage.analyzed_files == 1 and stage.eligible_files == 2
+        stage.status == "limited"
+        and stage.analyzed_files == 1
+        and stage.eligible_files == 2
         for stage in stages
     )
 
@@ -477,7 +507,10 @@ def test_pyscn_partial_coverage_is_visible(tmp_path):
 def test_pyscn_deadcode_invalid_summary_cannot_be_clean(tmp_path):
     data = pyscn_data()
     data["summary"]["dead_code_count"] = 1
-    assert analyze_pyscn(make_context(tmp_path, FakeRunner(json.dumps(data))))[2].status == "failed"
+    assert (
+        analyze_pyscn(make_context(tmp_path, FakeRunner(json.dumps(data))))[2].status
+        == "failed"
+    )
 
 
 def test_radon_api_missing_package_and_unsafe_metric(tmp_path):
@@ -485,7 +518,9 @@ def test_radon_api_missing_package_and_unsafe_metric(tmp_path):
     assert result.status == "missing" and not result.required and not result.metrics
     for metric in [True, None, -1, 101, float("inf")]:
         report = {"version": "6.0.1", "files": {"a.py": {"mi": metric}}}
-        result = analyze_maintainability(make_context(tmp_path, FakeRunner(json.dumps(report))))
+        result = analyze_maintainability(
+            make_context(tmp_path, FakeRunner(json.dumps(report)))
+        )
         assert result.status == "failed" and not result.metrics
 
 
@@ -499,7 +534,9 @@ def test_empty_python_inventory_is_not_passing(tmp_path):
         runner = FakeRunner("[]")
         result = adapter(make_context(tmp_path, runner, {}))
         stages = result if isinstance(result, list) else [result]
-        assert all(stage.status == "unsupported" and stage.metrics == {} for stage in stages)
+        assert all(
+            stage.status == "unsupported" and stage.metrics == {} for stage in stages
+        )
         assert not runner.calls
 
 

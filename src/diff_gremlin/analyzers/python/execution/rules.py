@@ -20,10 +20,14 @@ _PYTHON_PROCESS = {
 
 
 def _process_rule(node: ast.Call, name: str):
-    shell = next((keyword.value for keyword in node.keywords if keyword.arg == "shell"), None)
+    shell = next(
+        (keyword.value for keyword in node.keywords if keyword.arg == "shell"), None
+    )
     if name.endswith(("getoutput", "getstatusoutput")):
         return "python.shell-execution", "high"
-    if shell is not None and not (isinstance(shell, ast.Constant) and shell.value is False):
+    if shell is not None and not (
+        isinstance(shell, ast.Constant) and shell.value is False
+    ):
         return "python.shell-execution", "high"
     return "python.process-call", "info"
 

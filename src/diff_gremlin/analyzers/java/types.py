@@ -14,11 +14,15 @@ from diff_gremlin.domain.findings import Finding
 from diff_gremlin.domain.stages import StageResult
 
 _ID, _LABEL = "java.types", "Java standalone static types"
-_DIAGNOSTIC = re.compile(r"^(.+\.java):(\d+):(\d+): (compiler\.(?:err|warn)\.[a-z0-9.]+)")
+_DIAGNOSTIC = re.compile(
+    r"^(.+\.java):(\d+):(\d+): (compiler\.(?:err|warn)\.[a-z0-9.]+)"
+)
 
 
 def _invoke(ctx, compiler, files):
-    with tempfile.TemporaryDirectory(prefix="java-types-", dir=ctx.scratch) as directory:
+    with tempfile.TemporaryDirectory(
+        prefix="java-types-", dir=ctx.scratch
+    ) as directory:
         workspace = Path(directory)
         empty = workspace / "empty"
         empty.mkdir()
@@ -82,7 +86,8 @@ def _counts(findings):
     errors = sum(f.severity == "medium" for f in findings)
     warnings = sum(f.severity == "low" for f in findings)
     dependencies = sum(
-        f.rule in {"compiler.err.doesnt.exist", "compiler.err.cant.access"} for f in findings
+        f.rule in {"compiler.err.doesnt.exist", "compiler.err.cant.access"}
+        for f in findings
     )
     return errors, warnings, dependencies
 
@@ -90,7 +95,8 @@ def _counts(findings):
 def _diagnostics(result, files):
     paths, names = _source_paths(files)
     observations = (
-        _diagnostic(line, paths, names) for line in (result.stdout + result.stderr).splitlines()
+        _diagnostic(line, paths, names)
+        for line in (result.stdout + result.stderr).splitlines()
     )
     findings = [finding for finding in observations if finding is not None]
     errors, warnings, dependency_count = _counts(findings)
@@ -102,7 +108,9 @@ def _diagnostics(result, files):
 def analyze_java_types(ctx: ScanContext) -> StageResult:
     files = tuple(file for file in ctx.production_files if file.language == "java")
 
-    absent = partial(unavailable, _ID, _LABEL, "types", "javac", eligible_files=len(files))
+    absent = partial(
+        unavailable, _ID, _LABEL, "types", "javac", eligible_files=len(files)
+    )
 
     if not files:
         return absent("No Java production files", status="skipped")

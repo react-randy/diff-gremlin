@@ -2,7 +2,11 @@
 
 import ast
 
-from diff_gremlin.analyzers.python.execution.bindings import _Bindings, _parameters, _Scope
+from diff_gremlin.analyzers.python.execution.bindings import (
+    _Bindings,
+    _parameters,
+    _Scope,
+)
 from diff_gremlin.analyzers.python.execution.rules import _python_rule
 from diff_gremlin.domain.context import SourceFile
 from diff_gremlin.domain.findings import Finding
@@ -75,7 +79,9 @@ class _PythonCalls(ast.NodeVisitor):
         for generator in node.generators:
             for condition in generator.ifs:
                 self.visit(condition)
-        expressions = (node.key, node.value) if isinstance(node, ast.DictComp) else (node.elt,)
+        expressions = (
+            (node.key, node.value) if isinstance(node, ast.DictComp) else (node.elt,)
+        )
         for expression in expressions:
             self.visit(expression)
         self.scopes.pop()
@@ -112,7 +118,9 @@ def _python_calls(file: SourceFile) -> list[Finding]:
     return observer.findings
 
 
-def observe_python_calls(files: tuple[SourceFile, ...]) -> tuple[list[Finding], int, str]:
+def observe_python_calls(
+    files: tuple[SourceFile, ...],
+) -> tuple[list[Finding], int, str]:
     """Return observations, analyzed count and limitations for inventoried Python files."""
     findings, reasons = [], []
     analyzed = 0

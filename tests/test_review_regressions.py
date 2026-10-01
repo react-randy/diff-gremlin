@@ -80,14 +80,18 @@ def cli(repo, environment, *arguments):
         timeout=30,
     )
     assert fingerprint(repo) == before, "CLI changed caller source or Git metadata"
-    assert not list(Path(environment["TMPDIR"]).iterdir()), "scan resources survived CLI exit"
+    assert not list(Path(environment["TMPDIR"]).iterdir()), (
+        "scan resources survived CLI exit"
+    )
     assert result.returncode in {0, 1, 3}, result.stderr
     assert not result.stderr, result.stderr
     return result
 
 
 @pytest.mark.skipif(not hasattr(os, "mkfifo"), reason="requires POSIX FIFO support")
-def test_regular_source_replaced_by_fifo_fails_without_blocking(tmp_path, child_environment):
+def test_regular_source_replaced_by_fifo_fails_without_blocking(
+    tmp_path, child_environment
+):
     source = tmp_path / "source"
     source.mkdir()
     (source / "race.txt").write_bytes(b"original source\n")
@@ -135,7 +139,9 @@ def test_regular_source_replaced_by_fifo_fails_without_blocking(tmp_path, child_
             timeout=3,
         )
     except subprocess.TimeoutExpired as error:
-        pytest.fail(f"acquisition blocked on replaced FIFO despite deadline: {error.stdout!r}")
+        pytest.fail(
+            f"acquisition blocked on replaced FIFO despite deadline: {error.stdout!r}"
+        )
     assert result.returncode == 0, result.stderr
     assert "FIFO installed after regular-file stat" in result.stdout
     assert "Rejected nonregular source" in result.stdout
@@ -144,7 +150,9 @@ def test_regular_source_replaced_by_fifo_fails_without_blocking(tmp_path, child_
     assert not list(Path(child_environment["TMPDIR"]).iterdir())
 
 
-@pytest.mark.skipif(os.name != "posix", reason="requires surrogateescaped POSIX filenames")
+@pytest.mark.skipif(
+    os.name != "posix", reason="requires surrogateescaped POSIX filenames"
+)
 @pytest.mark.parametrize("reverse", [False, True], ids=["added", "resolved"])
 def test_cli_compare_preserves_nonutf8_filename_unicode_finding(
     repository, child_environment, reverse
@@ -179,7 +187,9 @@ def test_cli_compare_preserves_nonutf8_filename_unicode_finding(
     assert document["comparison_base_sha"] == before
     assert document["base"]["source"]["commit_sha"] == before
     assert document["head"]["source"]["commit_sha"] == after
-    delta = next(stage for stage in document["deltas"] if stage["id"] == "security.unicode")
+    delta = next(
+        stage for stage in document["deltas"] if stage["id"] == "security.unicode"
+    )
     assert delta["comparable"]
     change = "resolved_findings" if reverse else "added_findings"
     opposite = "added_findings" if reverse else "resolved_findings"
@@ -225,8 +235,10 @@ def test_cli_human_source_labels_describe_scanned_bytes(
         output_format,
     )
     lines = result.stdout.splitlines()
-    label = lines[1] if output_format == "text" else next(
-        line for line in lines if line.startswith("Commit:")
+    label = (
+        lines[1]
+        if output_format == "text"
+        else next(line for line in lines if line.startswith("Commit:"))
     )
     if mode in {"dirty", "clean"}:
         assert "working tree" in label

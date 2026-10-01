@@ -7,7 +7,10 @@ from diff_gremlin.policy.metrics import number
 def metric_blockers(stage: StageResult) -> list[str]:
     if stage.category == "complexity" and (number(stage, "max_cc") or 0) > 50:
         return [f"{stage.id}: a function exceeds 50 cyclomatic complexity"]
-    if stage.category == "duplication" and (number(stage, "duplication_percent") or 0) > 60:
+    if (
+        stage.category == "duplication"
+        and (number(stage, "duplication_percent") or 0) > 60
+    ):
         return [f"{stage.id}: duplication exceeds 60%"]
     checks = stage.metrics.get("checks")
     if (

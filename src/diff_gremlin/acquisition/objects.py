@@ -10,7 +10,9 @@ from diff_gremlin.acquisition.paths import safe_link, safe_path
 from diff_gremlin.acquisition.tree import TreeEntry, tree_entries
 
 
-def extract_tree(git: Git, repo: Path, commit: str, destination: Path) -> tuple[TreeEntry, ...]:
+def extract_tree(
+    git: Git, repo: Path, commit: str, destination: Path
+) -> tuple[TreeEntry, ...]:
     destination.mkdir()
     entries = tree_entries(git, repo, commit)
     for entry, content in _blob_batches(git, repo, entries):

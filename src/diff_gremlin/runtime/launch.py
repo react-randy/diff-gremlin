@@ -10,7 +10,12 @@ from collections.abc import Mapping, Sequence
 from pathlib import Path
 
 from diff_gremlin.domain.process import RunResult
-from diff_gremlin.runtime.environment import _executable, minimal_environment, redact, trusted_path
+from diff_gremlin.runtime.environment import (
+    _executable,
+    minimal_environment,
+    redact,
+    trusted_path,
+)
 from diff_gremlin.runtime.streams import capture, stop_group
 
 
@@ -20,9 +25,13 @@ def validate(command: Sequence[str], timeout: float, output_limit: int) -> None:
         or not command
         or any(not isinstance(arg, str) or "\0" in arg for arg in command)
     ):
-        raise ValueError("process command must contain nonempty, NUL-free string arguments")
+        raise ValueError(
+            "process command must contain nonempty, NUL-free string arguments"
+        )
     if not math.isfinite(timeout) or timeout <= 0 or output_limit <= 0:
-        raise ValueError("process timeout and output limit must be positive finite bounds")
+        raise ValueError(
+            "process timeout and output limit must be positive finite bounds"
+        )
 
 
 def launch_arguments(
@@ -70,7 +79,9 @@ def decoded_output(
     if status != "ok":
         stderr = (stderr + f"\nProcess stopped: {status}").strip()
     stdout_bytes = stdout.encode("utf-8", "surrogateescape")[:limit]
-    stderr_bytes = stderr.encode("utf-8", "surrogateescape")[: max(0, limit - len(stdout_bytes))]
+    stderr_bytes = stderr.encode("utf-8", "surrogateescape")[
+        : max(0, limit - len(stdout_bytes))
+    ]
     return stdout_bytes.decode("utf-8", "surrogateescape"), stderr_bytes.decode(
         "utf-8", "surrogateescape"
     )
@@ -102,7 +113,9 @@ def run_owned(
             duration_seconds=time.monotonic() - started,
         )
     try:
-        process = start(launch_arguments(executable, command[1:], file_limit), cwd, environment)
+        process = start(
+            launch_arguments(executable, command[1:], file_limit), cwd, environment
+        )
     except OSError as error:
         status = "missing" if isinstance(error, FileNotFoundError) else "failed"
         return RunResult(
@@ -122,9 +135,15 @@ def run_owned(
     finally:
         finish(process)
     stdout, stderr = decoded_output(
-        chunks, env=env, protect_stdout=protect_stdout, status=status, limit=output_limit
+        chunks,
+        env=env,
+        protect_stdout=protect_stdout,
+        status=status,
+        limit=output_limit,
     )
-    return RunResult(args, process.returncode, stdout, stderr, status, time.monotonic() - started)
+    return RunResult(
+        args, process.returncode, stdout, stderr, status, time.monotonic() - started
+    )
 
 
 def execute(

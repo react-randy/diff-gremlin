@@ -19,8 +19,12 @@ def _blob_hash(content: bytes, length: int) -> str:
     return hasher.hexdigest()
 
 
-def working_tree_dirty(git: Git, source: Path, tree: tuple[TreeEntry, ...], copied: dict) -> bool:
-    expected = {entry.path: (entry.mode, entry.oid) for entry in tree if in_scope(entry.path)}
+def working_tree_dirty(
+    git: Git, source: Path, tree: tuple[TreeEntry, ...], copied: dict
+) -> bool:
+    expected = {
+        entry.path: (entry.mode, entry.oid) for entry in tree if in_scope(entry.path)
+    }
     actual = {
         path: (mode, _blob_hash(content, len(tree[0].oid) if tree else 40))
         for path, (mode, content) in copied.items()
@@ -32,7 +36,9 @@ def working_tree_dirty(git: Git, source: Path, tree: tuple[TreeEntry, ...], copi
 
 def _index_entries(git: Git, source: Path) -> dict[str, tuple[str, str]] | None:
     index = {}
-    for row in git.run(["ls-files", "--stage", "-z"], cwd=source, data=True).split("\0"):
+    for row in git.run(["ls-files", "--stage", "-z"], cwd=source, data=True).split(
+        "\0"
+    ):
         if not row:
             continue
         metadata, path = row.split("\t", 1)

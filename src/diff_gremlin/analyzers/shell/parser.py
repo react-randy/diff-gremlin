@@ -7,7 +7,11 @@ from dataclasses import dataclass, field
 from diff_gremlin.analyzers.javascript.installed import trusted_executable
 from diff_gremlin.analyzers.shell.dialect import dialect
 from diff_gremlin.analyzers.shell.schema import MAX_JSON_BYTES, decode
-from diff_gremlin.analyzers.shell.source import MAX_FILES, MAX_TOTAL_SOURCE_BYTES, read_source
+from diff_gremlin.analyzers.shell.source import (
+    MAX_FILES,
+    MAX_TOTAL_SOURCE_BYTES,
+    read_source,
+)
 from diff_gremlin.domain.context import ScanContext, SourceFile
 from diff_gremlin.domain.findings import Finding
 from diff_gremlin.domain.stages import StageStatus
@@ -56,8 +60,14 @@ def installed_parser(ctx: ScanContext, timeout: float | None = None) -> tuple[st
     binary = trusted_executable(ctx, "shfmt")
     if not binary:
         return "", "Shell parser shfmt unavailable"
-    result = ctx.run([binary, "--version"], cwd=ctx.scratch, output_limit=1024, timeout=timeout)
-    if result.status != "ok" or result.returncode != 0 or result.stdout.strip() != f"v{VERSION}":
+    result = ctx.run(
+        [binary, "--version"], cwd=ctx.scratch, output_limit=1024, timeout=timeout
+    )
+    if (
+        result.status != "ok"
+        or result.returncode != 0
+        or result.stdout.strip() != f"v{VERSION}"
+    ):
         return "", "Shell parser version unavailable or differs from pinned 3.14.1"
     return binary, ""
 
@@ -67,7 +77,9 @@ def syntax_finding(file: SourceFile, stderr: str, source: str) -> Finding:
     match = re.match(r"^(\d{1,9}):(\d{1,9}):", stderr)
     line, column = map(int, match.groups()) if match else (0, 0)
     lines = source.splitlines()
-    if not (1 <= line <= len(lines) and 1 <= column <= len(lines[line - 1].encode()) + 1):
+    if not (
+        1 <= line <= len(lines) and 1 <= column <= len(lines[line - 1].encode()) + 1
+    ):
         line, column = 0, 0
     return Finding(
         "shell.syntax-error",
@@ -87,7 +99,9 @@ def parse_file(
         source = read_source(ctx, file)
         language = dialect(source)
     except (OSError, UnicodeError, ValueError):
-        parsed.reasons.append(f"Shell read, size or dialect unavailable: {file.relative_path}")
+        parsed.reasons.append(
+            f"Shell read, size or dialect unavailable: {file.relative_path}"
+        )
         return
     if budget.remaining_time() <= 0:
         parsed.reasons.append(
@@ -103,10 +117,16 @@ def parse_file(
         output_limit=output_limit,
         timeout=budget.remaining_time(),
     )
-    output_bytes = len(result.stdout.encode("utf-8")) + len(result.stderr.encode("utf-8"))
-    budget.output_remaining -= output_limit if result.status == "output_limit" else output_bytes
+    output_bytes = len(result.stdout.encode("utf-8")) + len(
+        result.stderr.encode("utf-8")
+    )
+    budget.output_remaining -= (
+        output_limit if result.status == "output_limit" else output_bytes
+    )
     if output_bytes > output_limit:
-        parsed.reasons.append(f"Shell parser output byte limit exceeded: {file.relative_path}")
+        parsed.reasons.append(
+            f"Shell parser output byte limit exceeded: {file.relative_path}"
+        )
         return
     if result.status != "ok" or result.returncode != 0:
         parsed.reasons.append(
@@ -127,7 +147,9 @@ def parse_files(ctx: ScanContext, files: tuple[SourceFile, ...]) -> Parsed:
     """Preserve coverage counts and partial evidence under every bounded failure."""
     parsed = Parsed()
     started = time.monotonic()
-    budget = Budget(started + max(0.0, ctx.timeout), MAX_TOTAL_SOURCE_BYTES, MAX_TOTAL_OUTPUT_BYTES)
+    budget = Budget(
+        started + max(0.0, ctx.timeout), MAX_TOTAL_SOURCE_BYTES, MAX_TOTAL_OUTPUT_BYTES
+    )
     if not files:
         parsed.status = "unsupported"
         parsed.reasons.append("No inventoried Shell files in this scope")
@@ -140,7 +162,9 @@ def parse_files(ctx: ScanContext, files: tuple[SourceFile, ...]) -> Parsed:
         return parsed
     binary, reason = installed_parser(ctx, budget.remaining_time())
     if not binary:
-        parsed.status = "missing" if reason == "Shell parser shfmt unavailable" else "failed"
+        parsed.status = (
+            "missing" if reason == "Shell parser shfmt unavailable" else "failed"
+        )
         parsed.reasons.append(reason)
         if budget.remaining_time() <= 0:
             parsed.status = "timeout"
@@ -158,7 +182,11 @@ def parse_files(ctx: ScanContext, files: tuple[SourceFile, ...]) -> Parsed:
 
 
 def parse_selected(
-    ctx: ScanContext, binary: str, files: tuple[SourceFile, ...], parsed: Parsed, budget: Budget
+    ctx: ScanContext,
+    binary: str,
+    files: tuple[SourceFile, ...],
+    parsed: Parsed,
+    budget: Budget,
 ) -> None:
     """Keep all omitted files eligible while retaining earlier validated trees."""
     for index, file in enumerate(files[:MAX_FILES]):

@@ -77,7 +77,10 @@ class Inventory:
 def is_test_path(path: Path) -> bool:
     stem = path.stem
     return (
-        any(part.lower() in {"test", "tests", "__tests__", "spec", "specs"} for part in path.parts)
+        any(
+            part.lower() in {"test", "tests", "__tests__", "spec", "specs"}
+            for part in path.parts
+        )
         or stem.lower() == "test"
         or stem.lower().startswith("test_")
         or stem.lower().endswith(("_test", ".test", ".spec", "_spec"))
@@ -129,7 +132,9 @@ def inventory_file(state: InventoryState, child, relative: Path, size: int) -> N
     )
 
 
-def inventory_entry(state: InventoryState, child, relative: Path, pending: list[Path]) -> None:
+def inventory_entry(
+    state: InventoryState, child, relative: Path, pending: list[Path]
+) -> None:
     info = child.stat(follow_symlinks=False)
     if stat.S_ISLNK(info.st_mode):
         state.issue(relative, "Symbolic link not followed")
@@ -144,7 +149,9 @@ def inventory_entry(state: InventoryState, child, relative: Path, pending: list[
         state.issue(relative, "Nonregular file not read")
 
 
-def inventory_directory(state: InventoryState, directory: Path, pending: list[Path]) -> None:
+def inventory_directory(
+    state: InventoryState, directory: Path, pending: list[Path]
+) -> None:
     try:
         with os.scandir(directory) as children:
             for child in children:

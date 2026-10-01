@@ -25,7 +25,9 @@ from diff_gremlin.domain.sources import (
 def _local_path(target: str) -> Path:
     path = Path(target).expanduser().absolute()
     if path.is_symlink() or not path.is_dir():
-        raise ValueError("Local source must be an existing directory, not a symbolic link")
+        raise ValueError(
+            "Local source must be an existing directory, not a symbolic link"
+        )
     return path
 
 
@@ -40,7 +42,9 @@ def _identity(target: str, commit: str, date: str, mode: str, dirty: bool = Fals
     )
 
 
-def _ref_snapshot(git: Git, history: Path, commit: str, target: str, destination: Path) -> Snapshot:
+def _ref_snapshot(
+    git: Git, history: Path, commit: str, target: str, destination: Path
+) -> Snapshot:
     pin_history(git, history, commit)
     extract_tree(git, history, commit, destination)
     return Snapshot(
@@ -51,16 +55,25 @@ def _ref_snapshot(git: Git, history: Path, commit: str, target: str, destination
 
 
 def _working_snapshot(
-    git: Git, source: Path, destination: Path, history: Path | None, commit: str, has_git: bool
+    git: Git,
+    source: Path,
+    destination: Path,
+    history: Path | None,
+    commit: str,
+    has_git: bool,
 ) -> Snapshot:
     copied = copy_working_tree(source, destination, deadline=git.deadline)
     dirty = bool(copied) if has_git and not commit else False
     if commit and history is not None:
         pin_history(git, history, commit)
-        dirty = working_tree_dirty(git, source, tree_entries(git, history, commit), copied)
+        dirty = working_tree_dirty(
+            git, source, tree_entries(git, history, commit), copied
+        )
     date = git.date(history, commit) if commit and history is not None else ""
     return Snapshot(
-        destination, _identity(str(source), commit, date, "working-tree", dirty), history
+        destination,
+        _identity(str(source), commit, date, "working-tree", dirty),
+        history,
     )
 
 
@@ -80,8 +93,12 @@ def _local_source(git: Git, target: str, ref: str | None, workspace: Path) -> Sn
         history = local_history(git, source, workspace / "history.git")
         commit = _local_commit(git, source, ref, bare)
         if ref or bare:
-            return _ref_snapshot(git, history, commit, str(source), workspace / "source")
-    return _working_snapshot(git, source, workspace / "source", history, commit, has_git)
+            return _ref_snapshot(
+                git, history, commit, str(source), workspace / "source"
+            )
+    return _working_snapshot(
+        git, source, workspace / "source", history, commit, has_git
+    )
 
 
 @contextmanager
@@ -92,13 +109,17 @@ def acquire_source(target: str, *, ref: str | None = None, timeout: float = 120.
     with tempfile.TemporaryDirectory(prefix="diff-gremlin-source-") as directory:
         workspace = Path(directory)
         if url:
-            history, commit = remote_history(git, url, ref or "HEAD", workspace / "history.git")
+            history, commit = remote_history(
+                git, url, ref or "HEAD", workspace / "history.git"
+            )
             yield _ref_snapshot(git, history, commit, url, workspace / "source")
         else:
             yield _local_source(git, target, ref, workspace)
 
 
-def _review_side(git: Git, review: ReviewTarget, side: str, workspace: Path) -> Snapshot:
+def _review_side(
+    git: Git, review: ReviewTarget, side: str, workspace: Path
+) -> Snapshot:
     expected = review.base_sha if side == "base" else review.head_sha
     url = review.base_repo_url if side == "base" else review.head_repo_url
     verify_sha(expected)
@@ -139,16 +160,32 @@ def acquire_comparison(
             before = _review_side(git, review, "base", workspace)
             after = _review_side(git, review, "head", workspace)
         elif remote_url(target):
-            before_history, before_sha = remote_history(git, target, base, workspace / "base.git")
-            after_history, after_sha = remote_history(git, target, head, workspace / "head.git")
-            before = _ref_snapshot(git, before_history, before_sha, target, workspace / "base")
-            after = _ref_snapshot(git, after_history, after_sha, target, workspace / "head")
+            before_history, before_sha = remote_history(
+                git, target, base, workspace / "base.git"
+            )
+            after_history, after_sha = remote_history(
+                git, target, head, workspace / "head.git"
+            )
+            before = _ref_snapshot(
+                git, before_history, before_sha, target, workspace / "base"
+            )
+            after = _ref_snapshot(
+                git, after_history, after_sha, target, workspace / "head"
+            )
         else:
             source = _local_path(target)
             before_sha, after_sha = git.resolve(source, base), git.resolve(source, head)
             history = local_history(git, source, workspace / "history.git")
-            before_history = history_view(git, history, workspace / "base.git", before_sha)
-            after_history = history_view(git, history, workspace / "head.git", after_sha)
-            before = _ref_snapshot(git, before_history, before_sha, str(source), workspace / "base")
-            after = _ref_snapshot(git, after_history, after_sha, str(source), workspace / "head")
+            before_history = history_view(
+                git, history, workspace / "base.git", before_sha
+            )
+            after_history = history_view(
+                git, history, workspace / "head.git", after_sha
+            )
+            before = _ref_snapshot(
+                git, before_history, before_sha, str(source), workspace / "base"
+            )
+            after = _ref_snapshot(
+                git, after_history, after_sha, str(source), workspace / "head"
+            )
         yield SnapshotPair(before, after, review, before.identity.commit_sha)

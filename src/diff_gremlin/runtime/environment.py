@@ -69,7 +69,8 @@ def _executable(name: str, cwd: Path | None, path: str) -> str | None:
         resolved = candidate.resolve()
         lexical = candidate.absolute()
         if cwd and any(
-            path == cwd.resolve() or cwd.resolve() in path.parents for path in (resolved, lexical)
+            path == cwd.resolve() or cwd.resolve() in path.parents
+            for path in (resolved, lexical)
         ):
             return None
         return str(lexical)

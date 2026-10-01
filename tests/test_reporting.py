@@ -62,7 +62,9 @@ def test_location_move_does_not_invent_resolution():
 
 
 def test_machine_receipt_keeps_unknown_and_every_stage():
-    stage = StageResult("types", "Types", "types", "timeout", "fixture", reason="Deadline")
+    stage = StageResult(
+        "types", "Types", "types", "timeout", "fixture", reason="Deadline"
+    )
     document = report_document(report([stage]))
     assert document["assessment"]["score"] is None
     assert document["stages"][0]["status"] == "timeout"

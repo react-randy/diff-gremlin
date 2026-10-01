@@ -40,7 +40,9 @@ def coverage_gaps(stages: list[StageResult]) -> tuple[str, ...]:
         and (
             stage.status != "ok"
             or (
-                stage.category in WEIGHTS and stage.id != "inventory" and stage_score(stage) is None
+                stage.category in WEIGHTS
+                and stage.id != "inventory"
+                and stage_score(stage) is None
             )
         )
     )
@@ -51,7 +53,9 @@ def weighted_score(categories: dict[str, int | None], complete: bool) -> float |
         return None
     denominator = sum(WEIGHTS[category] for category in categories)
     numerator = sum(
-        WEIGHTS[category] * score for category, score in categories.items() if score is not None
+        WEIGHTS[category] * score
+        for category, score in categories.items()
+        if score is not None
     )
     return round(numerator / denominator, 2)
 
@@ -61,7 +65,9 @@ def decision_for(stages: list[StageResult], complete: bool, reasons: list[str]) 
         return "hold"
     if not complete:
         return "unknown"
-    if any(f.severity in {"medium", "high"} for stage in stages for f in stage.findings):
+    if any(
+        f.severity in {"medium", "high"} for stage in stages for f in stage.findings
+    ):
         return "review"
     return "no_configured_blockers"
 

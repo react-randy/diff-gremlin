@@ -26,7 +26,9 @@ def _clone_fragment(
     )
 
 
-def _group_findings(ctx: ScanContext, files: tuple[SourceFile, ...], groups: list) -> list[Finding]:
+def _group_findings(
+    ctx: ScanContext, files: tuple[SourceFile, ...], groups: list
+) -> list[Finding]:
     findings = []
     seen_ids = set()
     for value in groups:

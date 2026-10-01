@@ -15,7 +15,9 @@ def bounded_number(value: str) -> float:
 def positive_seconds(value: str) -> float:
     parsed = float(value)
     if not 0 < parsed <= 3600:
-        raise argparse.ArgumentTypeError("timeout must be greater than 0 and at most 3600 seconds")
+        raise argparse.ArgumentTypeError(
+            "timeout must be greater than 0 and at most 3600 seconds"
+        )
     return parsed
 
 
@@ -64,7 +66,9 @@ def parser() -> argparse.ArgumentParser:
         epilog="Examples: diff-gremlin check . | diff-gremlin pr URL --format json | diff-gremlin doctor\nExits: 0 complete, 1 gate failure, 2 operational/usage error, 3 incomplete evidence.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    root.add_argument("--version", action="version", version=f"diff-gremlin {__version__}")
+    root.add_argument(
+        "--version", action="version", version=f"diff-gremlin {__version__}"
+    )
     commands = root.add_subparsers(dest="command", required=True)
     check = commands.add_parser("check", help="inspect a local folder or Git HTTPS URL")
     check.add_argument(
@@ -74,22 +78,30 @@ def parser() -> argparse.ArgumentParser:
         help="folder or repository HTTPS URL (default: current folder)",
     )
     check.add_argument(
-        "--ref", help="scan an immutable Git snapshot at this ref instead of local current files"
+        "--ref",
+        help="scan an immutable Git snapshot at this ref instead of local current files",
     )
     common_options(check)
-    pr = commands.add_parser("pr", help="compare immutable GitHub PR or GitLab MR snapshots")
+    pr = commands.add_parser(
+        "pr", help="compare immutable GitHub PR or GitLab MR snapshots"
+    )
     pr.add_argument("url", help="GitHub /pull/N or GitLab /-/merge_requests/N URL")
     common_options(pr, profile="quick")
-    compare = commands.add_parser("compare", help="compare two refs without changing your checkout")
+    compare = commands.add_parser(
+        "compare", help="compare two refs without changing your checkout"
+    )
     compare.add_argument("target", help="local Git folder or repository HTTPS URL")
     compare.add_argument("base", help="base ref or full SHA")
     compare.add_argument("head", help="head ref or full SHA")
     common_options(compare)
     doctor = commands.add_parser(
-        "doctor", help="show installed capabilities and actionable missing-tool guidance"
+        "doctor",
+        help="show installed capabilities and actionable missing-tool guidance",
     )
     doctor.add_argument("--format", choices=("text", "json"), default="text")
-    commands.add_parser("policy", help="print the versioned score policy and exit semantics")
+    commands.add_parser(
+        "policy", help="print the versioned score policy and exit semantics"
+    )
     return root
 
 

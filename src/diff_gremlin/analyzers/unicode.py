@@ -26,7 +26,9 @@ def _legitimate_joiner(text: str, index: int) -> bool:
 
 
 def _unexpected_tag(text, index):
-    return not any(0x1F000 <= ord(char) < 0xE0000 for char in text[max(0, index - 12) : index])
+    return not any(
+        0x1F000 <= ord(char) < 0xE0000 for char in text[max(0, index - 12) : index]
+    )
 
 
 def _unexpected_variation(text, index):

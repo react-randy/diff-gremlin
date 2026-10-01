@@ -43,7 +43,9 @@ def context(tmp_path):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
         file = SourceFile(path, name, language, False, path.stat().st_size)
-        return ScanContext(root, (file,), (file,), (language,), "full", 30, scratch, runner)
+        return ScanContext(
+            root, (file,), (file,), (language,), "full", 30, scratch, runner
+        )
 
     return make
 
@@ -167,7 +169,9 @@ def test_js_lexical_owners(context, source, expected):
         ("mjs", "import fs from 'node:fs';\nexport default fs;\n"),
     ],
 )
-def test_javascript_module_formats_preserve_correctness_policy(context, extension, source):
+def test_javascript_module_formats_preserve_correctness_policy(
+    context, extension, source
+):
     require_tools("node", "eslint")
     result = analyze_js_lint(context("library." + extension, "javascript", source))
     assert result.status == "ok", result.reason
@@ -176,7 +180,9 @@ def test_javascript_module_formats_preserve_correctness_policy(context, extensio
 
 def test_javascript_correctness_rules_remain_active(context):
     require_tools("node", "eslint")
-    result = analyze_js_lint(context("bad.cjs", "javascript", "const value = 1; value = 2;\n"))
+    result = analyze_js_lint(
+        context("bad.cjs", "javascript", "const value = 1; value = 2;\n")
+    )
     assert result.status == "ok", result.reason
     assert "no-const-assign" in {f.rule for f in result.findings}
 
@@ -184,7 +190,9 @@ def test_javascript_correctness_rules_remain_active(context):
 def test_typescript_policy_remains_scoped_to_typescript(context):
     require_tools("node", "eslint")
     result = analyze_js_lint(
-        context("library.ts", "typescript", "const fs = require('node:fs'); export {fs};\n")
+        context(
+            "library.ts", "typescript", "const fs = require('node:fs'); export {fs};\n"
+        )
     )
     assert result.status == "ok", result.reason
     assert "@typescript-eslint/no-require-imports" in {f.rule for f in result.findings}
@@ -209,25 +217,39 @@ def bedrock_payload(region, session=False):
     }
     if session:
         fields["X-Amz-Security-Token"] = "synthetic/session+credential=" * 7
-    fields["X-Amz-Signature"] = hashlib.sha256(b"nonfunctional calibration fixture").hexdigest()
+    fields["X-Amz-Signature"] = hashlib.sha256(
+        b"nonfunctional calibration fixture"
+    ).hexdigest()
     return "bedrock.amazonaws.com/?" + urlencode(fields) + "&Version=1"
 
 
 @pytest.mark.parametrize(
     "region,session",
-    [("us-east-1", False), ("eu-west-1", True), ("ap-southeast-2", False), ("cn-north-1", False)],
+    [
+        ("us-east-1", False),
+        ("eu-west-1", True),
+        ("ap-southeast-2", False),
+        ("cn-north-1", False),
+    ],
 )
-def test_full_synthetic_bedrock_credentials_are_detected_redacted(context, region, session):
+def test_full_synthetic_bedrock_credentials_are_detected_redacted(
+    context, region, session
+):
     require_tools("gitleaks")
     token = encode_bedrock(bedrock_payload(region, session))
     result = analyze_secrets(context("credentials.txt", "text", token))
     assert result.status == "ok", result.reason
     assert result.tool == "gitleaks" and result.version == "8.30.1"
-    assert "secret.aws-amazon-bedrock-api-key-short-lived" in {f.rule for f in result.findings}
+    assert "secret.aws-amazon-bedrock-api-key-short-lived" in {
+        f.rule for f in result.findings
+    }
     assert token not in repr(result)
     assert all(f.path == "credentials.txt" and f.line == 1 for f in result.findings)
     # Independent regex capture check: the detector captures the credential, not a hostname.
-    asset = Path(__file__).parents[1] / "src/diff_gremlin/analyzers/assets/gitleaks-v8.30.1.toml"
+    asset = (
+        Path(__file__).parents[1]
+        / "src/diff_gremlin/analyzers/assets/gitleaks-v8.30.1.toml"
+    )
     rule = next(
         row
         for row in tomllib.loads(asset.read_text())["rules"]
@@ -238,14 +260,20 @@ def test_full_synthetic_bedrock_credentials_are_detected_redacted(context, regio
 
 
 @pytest.mark.parametrize("control", ["marker", "truncated", "unsigned", "ordinary"])
-def test_bedrock_public_incomplete_ordinary_controls_are_not_credentials(context, control):
+def test_bedrock_public_incomplete_ordinary_controls_are_not_credentials(
+    context, control
+):
     require_tools("gitleaks")
     payload = bedrock_payload("us-east-1")
     samples = {
         "marker": encode_bedrock("bedrock.amazonaws.com"),
         "truncated": encode_bedrock(payload)[:-48],
-        "unsigned": encode_bedrock(payload.split("&X-Amz-Signature=")[0] + "&Version=1"),
-        "ordinary": encode_bedrock("bedrock.amazonaws.com/ordinary documentation&Version=1"),
+        "unsigned": encode_bedrock(
+            payload.split("&X-Amz-Signature=")[0] + "&Version=1"
+        ),
+        "ordinary": encode_bedrock(
+            "bedrock.amazonaws.com/ordinary documentation&Version=1"
+        ),
     }
     result = analyze_secrets(context("documentation.txt", "text", samples[control]))
     assert result.status == "ok", result.reason
@@ -253,7 +281,10 @@ def test_bedrock_public_incomplete_ordinary_controls_are_not_credentials(context
 
 
 def test_gitleaks_all_upstream_rule_identifiers_are_retained():
-    asset = Path(__file__).parents[1] / "src/diff_gremlin/analyzers/assets/gitleaks-v8.30.1.toml"
+    asset = (
+        Path(__file__).parents[1]
+        / "src/diff_gremlin/analyzers/assets/gitleaks-v8.30.1.toml"
+    )
     rules = tomllib.loads(asset.read_text())["rules"]
     assert len(rules) == 222
     assert len({rule["id"] for rule in rules}) == 222

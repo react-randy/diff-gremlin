@@ -24,11 +24,15 @@ def comparison(args) -> tuple[str, int]:
     from diff_gremlin.acquisition.snapshots import acquire_comparison
     from diff_gremlin.providers.resolve import resolve_review
 
-    review = resolve_review(args.url, timeout=args.timeout) if args.command == "pr" else None
+    review = (
+        resolve_review(args.url, timeout=args.timeout) if args.command == "pr" else None
+    )
     target = review.base_repo_url if review else args.target
     base = review.base_sha if review else args.base
     head = review.head_sha if review else args.head
-    with acquire_comparison(target, base, head, review=review, timeout=args.timeout) as pair:
+    with acquire_comparison(
+        target, base, head, review=review, timeout=args.timeout
+    ) as pair:
         before = scan(pair.base, profile=args.profile, timeout=args.timeout)
         after = scan(pair.head, profile=args.profile, timeout=args.timeout)
         document = compare_document(

@@ -51,7 +51,11 @@ def numeric_deltas(base: StageResult, head: StageResult) -> dict:
 def side_details(stage: StageResult | None) -> dict:
     if stage is None:
         return {"status": "absent", "score": None, "findings": []}
-    return {"status": stage.status, "score": stage_score(stage), "findings": stage.findings}
+    return {
+        "status": stage.status,
+        "score": stage_score(stage),
+        "findings": stage.findings,
+    }
 
 
 def confirmed_changes(base: StageResult | None, head: StageResult | None) -> dict:

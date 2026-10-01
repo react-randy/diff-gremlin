@@ -65,7 +65,9 @@ def _observations(stdout, files):
     functions = [_function(row, paths) for row in data["functions"]]
     if len(functions) != data["expected_count"]:
         raise ValueError("native complexity omitted a code path")
-    locations = {(row["file"], row["line"], row["column"], row["kind"]) for row in functions}
+    locations = {
+        (row["file"], row["line"], row["column"], row["kind"]) for row in functions
+    }
     if len(locations) != len(functions):
         raise ValueError("duplicate complexity identity")
     return functions, data["parse_errors"]
@@ -103,10 +105,14 @@ def _findings(hotspots):
 
 def analyze_js_complexity(ctx: ScanContext) -> StageResult:
     files = tuple(
-        file for file in ctx.production_files if file.language in {"javascript", "typescript"}
+        file
+        for file in ctx.production_files
+        if file.language in {"javascript", "typescript"}
     )
 
-    absent = partial(unavailable, _ID, _LABEL, "complexity", "eslint", eligible_files=len(files))
+    absent = partial(
+        unavailable, _ID, _LABEL, "complexity", "eslint", eligible_files=len(files)
+    )
 
     if not files:
         return absent("No JavaScript or TypeScript production files", status="skipped")

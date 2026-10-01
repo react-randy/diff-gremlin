@@ -99,13 +99,17 @@ def test_unicode_bidi_isolates_and_legitimate_emoji_joiner(context):
     assert len(result.findings) == 2
     assert {f.symbol for f in result.findings} == {"U+2066", "U+2069"}
     assert {f.line for f in result.findings} == {3}
-    zero = analyze_unicode(context([("b.py", "python", "value" + chr(0x200B) + " = 1\n")]))
+    zero = analyze_unicode(
+        context([("b.py", "python", "value" + chr(0x200B) + " = 1\n")])
+    )
     assert zero.findings[0].symbol == "U+200B" and zero.findings[0].column == 6
 
 
 def test_cross_file_unicode_does_not_pair_execution(context):
     result = analyze_execution(
-        context([("a.py", "python", "# " + chr(0x202E)), ("b.py", "python", 'eval("1")')])
+        context(
+            [("a.py", "python", "# " + chr(0x202E)), ("b.py", "python", 'eval("1")')]
+        )
     )
     assert not any(f.rule == "security.obfuscated-execution" for f in result.findings)
 
@@ -138,7 +142,9 @@ def test_java_actual_calls_ignore_comment_string_examples(context):
     }"""
     result = analyze_execution(context([("Main.java", "java", source)]))
     assert result.status == "ok" and result.metrics["call_count"] == 1
-    assert result.findings[0].rule == "java.runtime-exec" and result.findings[0].line == 4
+    assert (
+        result.findings[0].rule == "java.runtime-exec" and result.findings[0].line == 4
+    )
 
 
 @pytest.mark.parametrize(
@@ -186,9 +192,7 @@ def test_private_key_header_and_placeholder_controls(context):
         context([("identity.txt", "text", header + "\nFAKE NONFUNCTIONAL FIXTURE\n")])
     )
     assert result.findings[0].rule == "secret.private-key"
-    placeholders = (
-        'API_KEY = "your_example_key_here"\npassword: changeme123456\ntoken: ${TOKEN_FROM_ENV}\n'
-    )
+    placeholders = 'API_KEY = "your_example_key_here"\npassword: changeme123456\ntoken: ${TOKEN_FROM_ENV}\n'
     result = _analyze_patterns(context([("settings.env", "text", placeholders)]))
     assert result.status == "limited" and not result.findings
     assert "does not establish" in result.reason
@@ -230,8 +234,12 @@ def test_unparseable_and_unsupported_execution_coverage(context):
 
 
 def test_absent_detector_retains_honest_limited_fallback(context, monkeypatch):
-    monkeypatch.setattr("diff_gremlin.analyzers.secrets.trusted_executable", lambda *args: None)
-    result = analyze_secrets(context([("a.env", "text", "TOKEN=your_example_key_here")]))
+    monkeypatch.setattr(
+        "diff_gremlin.analyzers.secrets.trusted_executable", lambda *args: None
+    )
+    result = analyze_secrets(
+        context([("a.env", "text", "TOKEN=your_example_key_here")])
+    )
     assert result.status == "limited" and result.tool == "builtin-patterns"
     assert "does not establish" in result.reason
 
@@ -256,9 +264,13 @@ def test_live_gitleaks_canonical_pat_private_key_and_negative_control(context):
     )
     assert result.status == "ok", result.reason
     assert result.tool == "gitleaks" and result.version == "8.30.1"
-    assert {"secret.github-pat", "secret.private-key"} <= {f.rule for f in result.findings}
+    assert {"secret.github-pat", "secret.private-key"} <= {
+        f.rule for f in result.findings
+    }
     assert pat not in repr(result) and private_key not in repr(result)
-    clean = analyze_secrets(context([("safe.env", "text", "TOKEN=your_example_key_here\n")]))
+    clean = analyze_secrets(
+        context([("safe.env", "text", "TOKEN=your_example_key_here\n")])
+    )
     assert clean.status == "ok" and clean.metrics["match_count"] == 0
     assert "does not establish" in clean.reason
 
@@ -267,7 +279,9 @@ def test_target_gitleaks_suppressions_are_disabled(context):
     if not shutil.which("gitleaks"):
         pytest.skip("Actual official fixture-validated Gitleaks required")
     pat = "gh" + "p_" + ("9Y7jQ2kW4mN6pR8sT0uV3xZ5aB1cD6eF8gH2")
-    ctx = context([("credential.env", "text", "GITHUB_TOKEN=" + pat + " # gitleaks:allow\n")])
+    ctx = context(
+        [("credential.env", "text", "GITHUB_TOKEN=" + pat + " # gitleaks:allow\n")]
+    )
     (ctx.root / ".gitleaks.toml").write_text('title = "Disable all rules"\n')
     (ctx.root / ".gitleaksignore").write_text("credential.env:github-pat:1\n")
     result = analyze_secrets(ctx)
@@ -323,7 +337,9 @@ def test_gitleaks_malformed_report_and_rule_paths_never_pass(context):
             import json
 
             if "--report-path" in command:
-                Path(command[command.index("--report-path") + 1]).write_text(json.dumps(report))
+                Path(command[command.index("--report-path") + 1]).write_text(
+                    json.dumps(report)
+                )
             return RunResult(tuple(command), 1)
 
         ctx = replace(context([("safe.env", "text", "nothing")]), runner=fake)
@@ -338,12 +354,19 @@ def test_gitleaks_scans_lockfiles_with_credential_urls(context):
 
     pat = "gh" + "p_" + ("9Y7jQ2kW4mN6pR8sT0uV3xZ5aB1cD6eF8gH2")
     lock = json.dumps(
-        {"packages": {"example": {"resolved": "https://user:" + pat + "@registry.invalid/package"}}}
+        {
+            "packages": {
+                "example": {
+                    "resolved": "https://user:" + pat + "@registry.invalid/package"
+                }
+            }
+        }
     )
     result = analyze_secrets(context([("package-lock.json", "text", lock)]))
     assert result.status == "ok" and result.analyzed_files == 1
     assert any(
-        f.rule == "secret.github-pat" and f.path == "package-lock.json" for f in result.findings
+        f.rule == "secret.github-pat" and f.path == "package-lock.json"
+        for f in result.findings
     )
     assert pat not in repr(result)
     benign = analyze_secrets(
@@ -374,7 +397,9 @@ def test_direct_commonjs_process_call_is_parser_backed(context):
     if not shutil.which("tsc"):
         pytest.skip("Actual installed TypeScript parser required")
     result = analyze_execution(
-        context([("a.js", "javascript", 'require("node:child_process").exec("echo safe");')])
+        context(
+            [("a.js", "javascript", 'require("node:child_process").exec("echo safe");')]
+        )
     )
     assert result.status == "ok" and result.metrics["actionable_count"] == 1
     assert result.findings[0].rule == "javascript.shell-execution"
@@ -413,10 +438,14 @@ def test_java_safe_process_and_explicit_shell_calls_have_distinct_severity(conte
     }"""
     result = analyze_execution(context([("Main.java", "java", source)]))
     assert result.status == "ok"
-    assert any(f.rule == "java.runtime-exec" and f.severity == "info" for f in result.findings)
+    assert any(
+        f.rule == "java.runtime-exec" and f.severity == "info" for f in result.findings
+    )
     assert {f.line for f in result.findings if f.rule == "java.shell-execution"} == {
         4,
         5,
     }
-    assert {"java.unsafe-api", "java.reflective-load"} <= {f.rule for f in result.findings}
+    assert {"java.unsafe-api", "java.reflective-load"} <= {
+        f.rule for f in result.findings
+    }
     assert result.metrics["actionable_count"] == 2

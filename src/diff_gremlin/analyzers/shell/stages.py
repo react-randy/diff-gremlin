@@ -41,7 +41,9 @@ def analyze_shell_syntax(ctx: ScanContext) -> StageResult:
     """Parse all inventoried Shell files using the declared supported dialect."""
     files = shell_files(ctx.files)
     parsed = parse_files(ctx, files)
-    result = stage(ctx, files, parsed, "shell.syntax.shfmt", "Shell syntax", "structure")
+    result = stage(
+        ctx, files, parsed, "shell.syntax.shfmt", "Shell syntax", "structure"
+    )
     result.scope = "all-inventoried-shell"
     if parsed.trees:
         result.metrics = {
@@ -87,10 +89,14 @@ def analyze_shell_complexity(ctx: ScanContext) -> StageResult:
     """Measure only production Shell functions; retain partial-file coverage."""
     files = shell_files(ctx.production_files)
     parsed = parse_files(ctx, files)
-    result = stage(ctx, files, parsed, "complexity.shell", "Shell function decisions", "complexity")
+    result = stage(
+        ctx, files, parsed, "complexity.shell", "Shell function decisions", "complexity"
+    )
     if parsed.trees:
         rows = [
-            row for file, tree in parsed.trees for row in function_rows(tree, file.relative_path)
+            row
+            for file, tree in parsed.trees
+            for row in function_rows(tree, file.relative_path)
         ]
         result.metrics, hotspots = complexity_metrics(rows)
         result.findings.extend(hotspot_findings(hotspots))

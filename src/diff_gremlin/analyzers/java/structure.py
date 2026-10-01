@@ -22,7 +22,9 @@ _ID, _LABEL = "java.structure", "Java syntax and structure"
 
 
 def _observe(ctx, compiler, java, files):
-    with tempfile.TemporaryDirectory(prefix="java-parser-", dir=ctx.scratch) as directory:
+    with tempfile.TemporaryDirectory(
+        prefix="java-parser-", dir=ctx.scratch
+    ) as directory:
         workspace = Path(directory)
         empty = workspace / "empty"
         empty.mkdir()
@@ -54,12 +56,16 @@ def _observe(ctx, compiler, java, files):
             ],
             cwd=workspace,
         )
-        return replace(result, duration_seconds=result.duration_seconds + build.duration_seconds)
+        return replace(
+            result, duration_seconds=result.duration_seconds + build.duration_seconds
+        )
 
 
 def _structure(stdout, files):
     data = evidence(stdout, files)
-    if not all(natural(data.get(k)) for k in ("type_count", "method_count", "error_count")):
+    if not all(
+        natural(data.get(k)) for k in ("type_count", "method_count", "error_count")
+    ):
         raise ValueError("invalid structure counters")
     return data, located_findings(data["findings"], files)
 
@@ -85,7 +91,9 @@ def analyze_java_structure(ctx: ScanContext) -> StageResult:
     try:
         data, findings = _structure(result.stdout, files)
     except (ValueError, TypeError):
-        return absent("JDK parser returned malformed or incomplete evidence", status="failed")
+        return absent(
+            "JDK parser returned malformed or incomplete evidence", status="failed"
+        )
     return StageResult(
         _ID,
         _LABEL,

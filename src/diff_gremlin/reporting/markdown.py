@@ -45,7 +45,9 @@ def finding_lines(report: ScanReport) -> list[str]:
     lines = ["## Findings", ""]
     for stage in report.stages:
         for finding in stage.findings:
-            location = f"{finding.path}:{finding.line}" if finding.path else "repository"
+            location = (
+                f"{finding.path}:{finding.line}" if finding.path else "repository"
+            )
             lines.append(
                 f"- **{finding.severity}** {escape(location)} — {escape(finding.rule)}: {escape(finding.message)}"
             )
@@ -56,7 +58,9 @@ def finding_lines(report: ScanReport) -> list[str]:
 
 def render(report: ScanReport) -> str:
     lines = summary_lines(report) + stage_lines(report) + finding_lines(report)
-    lines += ["## Next actions", ""] + [f"- {escape(action)}" for action in next_actions(report)]
+    lines += ["## Next actions", ""] + [
+        f"- {escape(action)}" for action in next_actions(report)
+    ]
     lines += [
         "",
         "Static evidence, not a security certificate or an AI authorship detector.",

@@ -37,7 +37,9 @@ def _percentage(total: dict) -> float:
     return float(value)
 
 
-def _inventory(value: object, expected: set[str], *, complete: bool = False) -> set[str]:
+def _inventory(
+    value: object, expected: set[str], *, complete: bool = False
+) -> set[str]:
     if not isinstance(value, list) or not all(isinstance(path, str) for path in value):
         raise TypeError("missing source inventory identities")
     observed = set(value)
@@ -51,7 +53,14 @@ def _inventory(value: object, expected: set[str], *, complete: bool = False) -> 
 def _statistic_row(value: object) -> dict:
     if not isinstance(value, dict):
         raise TypeError("missing native source statistics")
-    counters = ("sources", "clones", "lines", "tokens", "duplicatedLines", "duplicatedTokens")
+    counters = (
+        "sources",
+        "clones",
+        "lines",
+        "tokens",
+        "duplicatedLines",
+        "duplicatedTokens",
+    )
     if not all(natural(value.get(key)) for key in counters):
         raise ValueError("invalid native source statistics")
     _percentage(value)
@@ -91,7 +100,11 @@ def _clone_location(location: object, paths: dict[str, str]) -> Finding:
     if not isinstance(location, dict) or not isinstance(location.get("name"), str):
         raise TypeError("invalid clone location")
     name = location["name"]
-    if name not in paths or not Path(name).is_file() or not positive(location.get("start")):
+    if (
+        name not in paths
+        or not Path(name).is_file()
+        or not positive(location.get("start"))
+    ):
         raise ValueError("clone location outside analyzed files")
     return Finding(
         "duplication.clone",
@@ -109,7 +122,8 @@ def _clones(rows: list, paths: dict[str, str]) -> list[Finding]:
         if not isinstance(row, dict) or not natural(row.get("lines")):
             raise ValueError("invalid clone record")
         findings.extend(
-            _clone_location(row.get(side), paths) for side in ("firstFile", "secondFile")
+            _clone_location(row.get(side), paths)
+            for side in ("firstFile", "secondFile")
         )
     return findings
 
@@ -119,10 +133,15 @@ def _report_data(report_path: Path, expected: set[str], invocation: str):
     if not isinstance(data, dict) or not isinstance(data.get("statistics"), dict):
         raise TypeError("missing duplication statistics")
     if data.get("invocation") != invocation or data.get("options") != _LIMITS:
-        raise ValueError("duplication evidence belongs to different invocation or options")
+        raise ValueError(
+            "duplication evidence belongs to different invocation or options"
+        )
     _inventory(data.get("requested_files"), expected, complete=True)
     detector = _inventory(data.get("detector_files"), expected)
-    total, rows = _statistic_row(data["statistics"].get("total")), data.get("duplicates")
+    total, rows = (
+        _statistic_row(data["statistics"].get("total")),
+        data.get("duplicates"),
+    )
     if not isinstance(rows, list):
         raise TypeError("missing clone list")
     if total["clones"] != len(rows):
@@ -167,11 +186,15 @@ def _observe(ctx, files, node, dependencies):
         source = workspace / "source"
         source.mkdir()
         _copy_sources(files, source)
-        paths = {str((source / file.relative_path).resolve()): file.relative_path for file in files}
+        paths = {
+            str((source / file.relative_path).resolve()): file.relative_path
+            for file in files
+        }
         invocation = uuid4().hex
         config = workspace / "config.json"
         config.write_text(
-            json.dumps({"files": list(paths), "invocation": invocation}), encoding="utf-8"
+            json.dumps({"files": list(paths), "invocation": invocation}),
+            encoding="utf-8",
         )
         output = workspace / "output"
         result = ctx.run(
@@ -186,7 +209,9 @@ def _observe(ctx, files, node, dependencies):
             cwd=workspace,
         )
         observations = (
-            _report(output / "jscpd-report.json", paths, invocation) if valid_run(result) else None
+            _report(output / "jscpd-report.json", paths, invocation)
+            if valid_run(result)
+            else None
         )
         return result, observations
 
@@ -209,10 +234,14 @@ def _environment(ctx):
 
 def analyze_js_duplication(ctx: ScanContext) -> StageResult:
     files = tuple(
-        file for file in ctx.production_files if file.language in {"javascript", "typescript"}
+        file
+        for file in ctx.production_files
+        if file.language in {"javascript", "typescript"}
     )
 
-    absent = partial(unavailable, _ID, _LABEL, "duplication", "jscpd", eligible_files=len(files))
+    absent = partial(
+        unavailable, _ID, _LABEL, "duplication", "jscpd", eligible_files=len(files)
+    )
 
     if not files:
         return absent("No JavaScript or TypeScript production files", status="skipped")

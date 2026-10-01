@@ -9,7 +9,9 @@ def children(node: dict) -> Iterator[dict]:
         if isinstance(value, dict) and "_kind" in value:
             yield value
         elif isinstance(value, list):
-            yield from (item for item in value if isinstance(item, dict) and "_kind" in item)
+            yield from (
+                item for item in value if isinstance(item, dict) and "_kind" in item
+            )
 
 
 def walk(node: dict, *, exclude_functions: bool = False) -> Iterator[dict]:

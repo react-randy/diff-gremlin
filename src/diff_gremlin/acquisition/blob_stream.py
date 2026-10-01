@@ -20,7 +20,9 @@ def _batches(entries: tuple[TreeEntry, ...]) -> Iterator[list[TreeEntry]]:
         yield batch
 
 
-def _decode_batch(output: bytes, batch: list[TreeEntry]) -> Iterator[tuple[TreeEntry, bytes]]:
+def _decode_batch(
+    output: bytes, batch: list[TreeEntry]
+) -> Iterator[tuple[TreeEntry, bytes]]:
     cursor = 0
     for entry in batch:
         end = output.find(b"\n", cursor)

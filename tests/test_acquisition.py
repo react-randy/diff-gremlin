@@ -9,7 +9,13 @@ from pathlib import Path
 
 import pytest
 
-from diff_gremlin.acquisition import object_store, objects, repositories, working, working_reads
+from diff_gremlin.acquisition import (
+    object_store,
+    objects,
+    repositories,
+    working,
+    working_reads,
+)
 from diff_gremlin.acquisition.auth import git_auth
 from diff_gremlin.acquisition.git import Git
 from diff_gremlin.acquisition.snapshots import acquire_comparison, acquire_source
@@ -126,7 +132,9 @@ def test_ref_is_exact_even_when_working_tree_differs(repository):
         assert (source.root / "code.py").read_text() == "original = 1\n"
 
 
-def test_source_blobs_preserve_nonutf8_and_secret_matching_bytes(repository, monkeypatch):
+def test_source_blobs_preserve_nonutf8_and_secret_matching_bytes(
+    repository, monkeypatch
+):
     repo, _base, _head = repository
     token = "fake-source-token"
     monkeypatch.setenv("GH_TOKEN", token)
@@ -200,13 +208,17 @@ def test_review_fork_same_name_and_moving_refs_use_captured_shas(repository, tmp
         assert pair.comparison_base_sha == base
 
 
-def test_remote_wrong_object_rejected_and_no_secret_argv_or_remotes(repository, monkeypatch):
+def test_remote_wrong_object_rejected_and_no_secret_argv_or_remotes(
+    repository, monkeypatch
+):
     repo, base, head = repository
     calls = []
 
     def fake_fetch(git_client, destination, url, ref):
         calls.append((url, ref))
-        shutil.copytree(repo / ".git" / "objects", destination / "objects", dirs_exist_ok=True)
+        shutil.copytree(
+            repo / ".git" / "objects", destination / "objects", dirs_exist_ok=True
+        )
         (destination / "FETCH_HEAD").write_text(head + "\n")
 
     monkeypatch.setattr(repositories, "_fetch", fake_fetch)
@@ -306,13 +318,17 @@ def test_local_comparison_never_fetches(repository, monkeypatch):
         pass
 
 
-def test_remote_success_is_object_only_without_persistent_remote_or_secret(repository, monkeypatch):
+def test_remote_success_is_object_only_without_persistent_remote_or_secret(
+    repository, monkeypatch
+):
     repo, _base, head = repository
     monkeypatch.setenv("GH_TOKEN", "fake-private-token")
 
     def fake_fetch(_git_client, destination, url, ref):
         assert "fake-private-token" not in url + ref
-        shutil.copytree(repo / ".git" / "objects", destination / "objects", dirs_exist_ok=True)
+        shutil.copytree(
+            repo / ".git" / "objects", destination / "objects", dirs_exist_ok=True
+        )
         (destination / "FETCH_HEAD").write_text(head + "\n")
 
     monkeypatch.setattr(repositories, "_fetch", fake_fetch)

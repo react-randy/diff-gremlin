@@ -45,7 +45,9 @@ def context(tmp_path):
             path = root / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(text, encoding="utf-8")
-            files.append(SourceFile(path, name, "typescript", False, path.stat().st_size))
+            files.append(
+                SourceFile(path, name, "typescript", False, path.stat().st_size)
+            )
         return ScanContext(
             root, tuple(files), tuple(files), ("typescript",), "full", 30, scratch, run
         )
@@ -85,9 +87,13 @@ def test_native_no_duplicate_input_has_complete_zero_evidence(context):
     assert stage_score(result) == 100
 
 
-def test_native_source_maps_count_processed_files_without_matching_token_windows(context):
+def test_native_source_maps_count_processed_files_without_matching_token_windows(
+    context,
+):
     # Five lines pass Finder's file filter; fewer than fifty tokens yield no clone windows.
-    result = analyze_js_duplication(context([("few.ts", "export const value = 1;\n\n\n\n")]))
+    result = analyze_js_duplication(
+        context([("few.ts", "export const value = 1;\n\n\n\n")])
+    )
     assert result.status == "ok", result.reason
     assert (result.analyzed_files, result.eligible_files) == (1, 1)
     assert result.metrics["detector_input_files"] == 1
@@ -125,7 +131,9 @@ def test_native_known_duplicates_survive_the_meaningful_window(context):
 
 
 def test_native_duplicates_with_short_input_preserve_findings_but_limit_score(context):
-    result = analyze_js_duplication(context([("a.ts", LONG), ("b.ts", LONG), ("short.ts", SHORT)]))
+    result = analyze_js_duplication(
+        context([("a.ts", LONG), ("b.ts", LONG), ("short.ts", SHORT)])
+    )
     assert result.status == "limited", result.reason
     assert (result.analyzed_files, result.eligible_files) == (2, 3)
     assert result.metrics["duplication_percent"] == 50
@@ -143,7 +151,9 @@ def test_empty_inventory_is_skipped_without_running_a_tool(context):
     assert result.metrics == {}
 
 
-@pytest.mark.parametrize("status,code", [("timeout", None), ("missing", None), ("ok", 2)])
+@pytest.mark.parametrize(
+    "status,code", [("timeout", None), ("missing", None), ("ok", 2)]
+)
 def test_failed_invocations_have_no_observations(context, status, code):
     def fake(command, **kwargs):
         return RunResult(tuple(command), code, status=status)
@@ -156,7 +166,9 @@ def test_failed_invocations_have_no_observations(context, status, code):
 def test_previous_report_cannot_substitute_for_this_invocation(context):
     def fake(command, *, cwd, **kwargs):
         old = cwd.parent / "jscpd-report.json"
-        old.write_text(json.dumps({"statistics": {"total": {"sources": 1}}, "duplicates": []}))
+        old.write_text(
+            json.dumps({"statistics": {"total": {"sources": 1}}, "duplicates": []})
+        )
         return RunResult(tuple(command), 0)
 
     result = analyze_js_duplication(context([("long.ts", LONG)], fake))
@@ -179,7 +191,10 @@ def test_current_bad_json_is_not_zero_duplication(context, contents):
     "field,value",
     [
         ("invocation", "previous-invocation"),
-        ("options", {"minLines": 1, "minTokens": 1, "maxLines": 1000, "maxSize": "100kb"}),
+        (
+            "options",
+            {"minLines": 1, "minTokens": 1, "maxLines": 1000, "maxSize": "100kb"},
+        ),
         ("requested_files", []),
         ("requested_files", ["/outside.ts"]),
         ("detector_files", ["/outside.ts"]),
@@ -187,7 +202,9 @@ def test_current_bad_json_is_not_zero_duplication(context, contents):
         ("duplicates", {}),
     ],
 )
-def test_valid_native_report_rejects_invocation_or_inventory_tampering(context, field, value):
+def test_valid_native_report_rejects_invocation_or_inventory_tampering(
+    context, field, value
+):
     def fake(command, **kwargs):
         result = native_runner(command, **kwargs)
         report = Path(command[command.index("--output") + 1]) / "jscpd-report.json"

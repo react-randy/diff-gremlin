@@ -34,7 +34,8 @@ def _readmes(roots):
 
 def _ci_present(files, roots):
     return ".gitlab-ci.yml" in roots or any(
-        name.startswith(".github/workflows/") and name.endswith((".yml", ".yaml")) for name in files
+        name.startswith(".github/workflows/") and name.endswith((".yml", ".yaml"))
+        for name in files
     )
 
 

@@ -2,8 +2,16 @@
 
 from pathlib import Path
 
-from diff_gremlin.analyzers.javascript.installed import installed_package, trusted_executable
-from diff_gremlin.analyzers.javascript.output import evidence, located_findings, natural, valid_run
+from diff_gremlin.analyzers.javascript.installed import (
+    installed_package,
+    trusted_executable,
+)
+from diff_gremlin.analyzers.javascript.output import (
+    evidence,
+    located_findings,
+    natural,
+    valid_run,
+)
 from diff_gremlin.domain.context import ScanContext, SourceFile
 from diff_gremlin.domain.findings import Finding
 

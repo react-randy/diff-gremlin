@@ -25,7 +25,12 @@ def commit_identities(text: str) -> list[tuple[str, int]]:
 
 def checked_output(result: RunResult, allow_missing: bool) -> str:
     """Validate Git transport evidence before consuming source metadata."""
-    if allow_missing and result.status == "ok" and result.returncode == 1 and not result.stdout:
+    if (
+        allow_missing
+        and result.status == "ok"
+        and result.returncode == 1
+        and not result.stdout
+    ):
         return ""
     if result.status == "ok" and result.returncode == 0:
         return result.stdout
@@ -44,7 +49,9 @@ class HistoryReader:
         self.repo = repo
         self.deadline = time.monotonic() + ctx.timeout
 
-    def git(self, *args: str, input_text: str | None = None, allow_missing: bool = False) -> str:
+    def git(
+        self, *args: str, input_text: str | None = None, allow_missing: bool = False
+    ) -> str:
         remaining = self.deadline - time.monotonic()
         if remaining <= 0:
             raise TimeoutError("bounded history deadline expired")
@@ -70,7 +77,10 @@ class HistoryReader:
 
     def is_repository(self) -> bool:
         inside = self.git("rev-parse", "--is-inside-work-tree").strip()
-        return inside == "true" or self.git("rev-parse", "--is-bare-repository").strip() == "true"
+        return (
+            inside == "true"
+            or self.git("rev-parse", "--is-bare-repository").strip() == "true"
+        )
 
     def is_shallow(self) -> bool:
         value = self.git("rev-parse", "--is-shallow-repository").strip()

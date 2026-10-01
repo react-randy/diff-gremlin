@@ -16,11 +16,16 @@ class _Bindings(ast.NodeVisitor):
             self.shadowed.add(node.id)
 
     def visit_Import(self, node):
-        self.aliases.update({item.asname or item.name: item.name for item in node.names})
+        self.aliases.update(
+            {item.asname or item.name: item.name for item in node.names}
+        )
 
     def visit_ImportFrom(self, node):
         self.aliases.update(
-            {item.asname or item.name: f"{node.module}.{item.name}" for item in node.names}
+            {
+                item.asname or item.name: f"{node.module}.{item.name}"
+                for item in node.names
+            }
         )
 
     def visit_FunctionDef(self, node):
@@ -45,6 +50,11 @@ class _Scope:
 
 
 def _parameters(arguments):
-    names = {arg.arg for arg in (*arguments.posonlyargs, *arguments.args, *arguments.kwonlyargs)}
-    names.update(arg.arg for arg in (arguments.vararg, arguments.kwarg) if arg is not None)
+    names = {
+        arg.arg
+        for arg in (*arguments.posonlyargs, *arguments.args, *arguments.kwonlyargs)
+    }
+    names.update(
+        arg.arg for arg in (arguments.vararg, arguments.kwarg) if arg is not None
+    )
     return names

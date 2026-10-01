@@ -32,7 +32,8 @@ def function_rows(tree: dict, path: str) -> list[dict]:
                 "line": node["Pos"]["Line"],
                 "cc": 1
                 + sum(
-                    decision_count(child) for child in walk(node["Body"], exclude_functions=True)
+                    decision_count(child)
+                    for child in walk(node["Body"], exclude_functions=True)
                 ),
             }
         )

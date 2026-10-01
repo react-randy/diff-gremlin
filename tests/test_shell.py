@@ -47,7 +47,11 @@ def context(tmp_path, files=None, runner=run):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text, encoding="utf-8")
         language = "shell" if path.suffix == ".sh" else "python"
-        rows.append(SourceFile(path, name, language, name.startswith("tests/"), len(text.encode())))
+        rows.append(
+            SourceFile(
+                path, name, language, name.startswith("tests/"), len(text.encode())
+            )
+        )
     scratch = tmp_path / "scratch"
     scratch.mkdir(exist_ok=True)
     return ScanContext(
@@ -142,7 +146,11 @@ def test_native_declared_dialects(tmp_path, shebang):
 def test_unsupported_shebang_stays_incomplete(tmp_path, shebang):
     ctx = context(tmp_path, {"a.sh": f"{shebang}\nprintf ok\n"})
     stage = analyze_shell_syntax(ctx)
-    assert stage.status == "limited" and stage.analyzed_files == 0 and stage.eligible_files == 1
+    assert (
+        stage.status == "limited"
+        and stage.analyzed_files == 0
+        and stage.eligible_files == 1
+    )
     assert "dialect" in stage.reason
     assert not stage.metrics
 
@@ -192,7 +200,10 @@ def test_native_syntax_scope_and_production_complexity(tmp_path):
     )
     assert analyze_shell_syntax(ctx).analyzed_files == 2
     stage = analyze_shell_complexity(ctx)
-    assert stage.analyzed_files == stage.eligible_files == 1 and stage.metrics["functions"] == 0
+    assert (
+        stage.analyzed_files == stage.eligible_files == 1
+        and stage.metrics["functions"] == 0
+    )
     ctx = replace(ctx, files=(ctx.files[-1],), production_files=(ctx.files[-1],))
     assert analyze_shell_syntax(ctx).status == "unsupported"
     assert shell_observations(ctx, ()) == ([], 0, "")
@@ -214,11 +225,16 @@ def test_native_syntax_scope_and_production_complexity(tmp_path):
         ("e\\val value", "shell.dynamic-command", "low"),
     ],
 )
-def test_native_calls_calibrated_without_argument_leak(tmp_path, command, rule, severity):
+def test_native_calls_calibrated_without_argument_leak(
+    tmp_path, command, rule, severity
+):
     ctx = context(tmp_path, {"a.sh": "#!/bin/bash\n" + command + "\n"})
     findings, count, reason = shell_observations(ctx, ctx.files)
     assert count == 1 and not reason, reason
-    assert len(findings) == 1 and (findings[0].rule, findings[0].severity) == (rule, severity)
+    assert len(findings) == 1 and (findings[0].rule, findings[0].severity) == (
+        rule,
+        severity,
+    )
     assert (findings[0].line, findings[0].column) == (2, 1)
     assert "$SECRET" not in json.dumps([asdict(f) for f in findings])
 
@@ -244,14 +260,24 @@ def test_partial_failure_preserves_actionable_findings(tmp_path):
     findings, count, reason = shell_observations(ctx, ctx.files)
     assert count == 1 and reason and any(f.rule == "shell.eval" for f in findings)
     stage = analyze_shell_syntax(ctx)
-    assert stage.status == "limited" and stage.analyzed_files == 1 and stage.eligible_files == 2
+    assert (
+        stage.status == "limited"
+        and stage.analyzed_files == 1
+        and stage.eligible_files == 2
+    )
     assert "SYNTHETIC_SECRET_PAYLOAD" not in json.dumps(asdict(stage))
     assert "SYNTHETIC_SECRET_PAYLOAD" not in json.dumps([asdict(f) for f in findings])
 
 
 @pytest.mark.parametrize(
     "status,code",
-    [("missing", None), ("timeout", None), ("failed", None), ("output_limit", 0), ("ok", 1)],
+    [
+        ("missing", None),
+        ("timeout", None),
+        ("failed", None),
+        ("output_limit", 0),
+        ("ok", 1),
+    ],
 )
 def test_process_failure_never_clean(tmp_path, status, code):
     runner = ParserRunner(
@@ -342,7 +368,11 @@ def test_file_and_source_caps_and_changed_unreadable_input(tmp_path, monkeypatch
     ctx = context(tmp_path, {"a.sh": "#!/bin/sh\n:\n", "b.sh": "#!/bin/sh\n:\n"})
     monkeypatch.setattr(parser, "MAX_FILES", 1)
     stage = analyze_shell_syntax(ctx)
-    assert stage.status == "limited" and stage.analyzed_files == 1 and stage.eligible_files == 2
+    assert (
+        stage.status == "limited"
+        and stage.analyzed_files == 1
+        and stage.eligible_files == 2
+    )
     assert "omitted 1" in stage.reason
     monkeypatch.setattr(source, "MAX_SOURCE_BYTES", 2)
     assert analyze_shell_syntax(ctx).analyzed_files == 0
@@ -413,10 +443,15 @@ def test_dialect_map_is_owned_and_strict():
             "#!/bin/bash",
             "declare -A x=([foo]=bar); arr=(a b); let x++; echo ${arr[0]:1:2} ${x/foo/bar} ${x@Q}; echo @(foo|bar); coproc worker { printf hi; }; time printf hi;\n",
         ),
-        ("#!/bin/bash", 'printf "$(cat <<EOF\n$(cat <<INNER\nhello\nINNER\n)\nEOF\n)"\n'),
+        (
+            "#!/bin/bash",
+            'printf "$(cat <<EOF\n$(cat <<INNER\nhello\nINNER\n)\nEOF\n)"\n',
+        ),
     ],
 )
-def test_native_structural_containers_arrays_and_nested_heredocs(tmp_path, shebang, body):
+def test_native_structural_containers_arrays_and_nested_heredocs(
+    tmp_path, shebang, body
+):
     stage = analyze_shell_syntax(context(tmp_path, {"a.sh": shebang + "\n" + body}))
     assert stage.status == "ok" and stage.analyzed_files == 1, stage.reason
     assert stage.scope == "all-inventoried-shell"
@@ -442,7 +477,9 @@ def test_conditional_omission_is_schema_failure(tmp_path):
 
 def test_hotspot_threshold_retains_real_finding(tmp_path):
     body = "if true; then :; fi; " * 10
-    stage = analyze_shell_complexity(context(tmp_path, {"a.sh": f"#!/bin/bash\nf(){{ {body}}}\n"}))
+    stage = analyze_shell_complexity(
+        context(tmp_path, {"a.sh": f"#!/bin/bash\nf(){{ {body}}}\n"})
+    )
     assert stage.status == "ok", stage.reason
     assert stage.metrics["max_cc"] == 11 and len(stage.findings) == 1
     assert stage.findings[0].rule == "shell.high-complexity"
@@ -505,7 +542,9 @@ def budget_context(tmp_path, monkeypatch, timeout=3):
     return replace(ctx, timeout=timeout, runner=runner), runner, clock, output
 
 
-def test_cumulative_deadline_includes_version_and_retains_findings(tmp_path, monkeypatch):
+def test_cumulative_deadline_includes_version_and_retains_findings(
+    tmp_path, monkeypatch
+):
     ctx, runner, _, _ = budget_context(tmp_path, monkeypatch)
     findings, count, reason = shell_observations(ctx, ctx.files)
     assert count == 1 and len(findings) == 1 and findings[0].rule == "shell.eval"
@@ -518,7 +557,11 @@ def test_version_probe_can_consume_entire_deadline(tmp_path, monkeypatch):
     ctx, runner, _, _ = budget_context(tmp_path, monkeypatch)
     runner.version_seconds = 3
     stage = analyze_shell_syntax(ctx)
-    assert stage.status == "limited" and stage.analyzed_files == 0 and stage.eligible_files == 3
+    assert (
+        stage.status == "limited"
+        and stage.analyzed_files == 0
+        and stage.eligible_files == 3
+    )
     assert "time budget exhausted; omitted 3 eligible files" in stage.reason
     assert len(runner.calls) == 1
 
@@ -535,7 +578,11 @@ def test_cumulative_source_bytes_keep_prior_tree_and_counts(tmp_path, monkeypatc
     ctx, runner, _, _ = budget_context(tmp_path, monkeypatch, timeout=30)
     monkeypatch.setattr(parser, "MAX_TOTAL_SOURCE_BYTES", ctx.files[0].size_bytes)
     stage = analyze_shell_complexity(ctx)
-    assert stage.status == "limited" and stage.analyzed_files == 1 and stage.eligible_files == 3
+    assert (
+        stage.status == "limited"
+        and stage.analyzed_files == 1
+        and stage.eligible_files == 3
+    )
     assert stage.metrics["functions"] == 0 and len(runner.calls) == 2
     assert "source byte budget exhausted; omitted 2 eligible files" in stage.reason
 
@@ -553,7 +600,11 @@ def test_output_exhaustion_mid_file_cannot_accept_oversized_tree(tmp_path, monke
     ctx, runner, _, output = budget_context(tmp_path, monkeypatch, timeout=30)
     monkeypatch.setattr(parser, "MAX_TOTAL_OUTPUT_BYTES", len(output.encode()) + 1)
     stage = analyze_shell_syntax(ctx)
-    assert stage.status == "limited" and stage.analyzed_files == 1 and stage.eligible_files == 3
+    assert (
+        stage.status == "limited"
+        and stage.analyzed_files == 1
+        and stage.eligible_files == 3
+    )
     assert runner.calls[-1][1]["output_limit"] == 1
     assert "output byte limit exceeded: b.sh" in stage.reason
     assert "output byte budget exhausted; omitted 1 eligible files" in stage.reason

@@ -65,7 +65,10 @@ def test_github_fork_same_name_has_exact_repositories_and_shas(monkeypatch):
 
 def test_enterprise_github_and_selfmanaged_nested_gitlab(monkeypatch):
     calls = mock_metadata(monkeypatch, [github_payload("code.example.test:8443")])
-    assert resolve_review("https://code.example.test:8443/team/repo/pull/12").provider == "github"
+    assert (
+        resolve_review("https://code.example.test:8443/team/repo/pull/12").provider
+        == "github"
+    )
     assert calls[0][1]["env"]["GH_HOST"] == "code.example.test:8443"
     values = [
         {
@@ -123,7 +126,9 @@ def test_incomplete_or_mismatched_metadata_rejected(mutation, monkeypatch):
 
 
 def test_failure_text_never_echoes_unknown_provider_credentials(monkeypatch):
-    mock_metadata(monkeypatch, [RunResult(("gh",), 1, stderr="private-unknown-credential")])
+    mock_metadata(
+        monkeypatch, [RunResult(("gh",), 1, stderr="private-unknown-credential")]
+    )
     with pytest.raises(RuntimeError) as error:
         resolve_review("https://github.com/team/repo/pull/12")
     assert "private-unknown-credential" not in str(error.value)
@@ -151,10 +156,15 @@ def test_auth_is_scoped_to_exact_provider_host(monkeypatch):
     monkeypatch.setenv("GH_TOKEN", "fake-github-token")
     monkeypatch.setenv("GITLAB_TOKEN", "fake-gitlab-token")
     monkeypatch.setenv("GITLAB_HOST", "git.example.test")
-    assert provider_environment("github.com", "github")["GH_TOKEN"] == "fake-github-token"
+    assert (
+        provider_environment("github.com", "github")["GH_TOKEN"] == "fake-github-token"
+    )
     assert "GH_TOKEN" not in provider_environment("enterprise.example.test", "github")
     assert "GITLAB_TOKEN" not in provider_environment("gitlab.com", "gitlab")
-    assert provider_environment("git.example.test", "gitlab")["GITLAB_TOKEN"] == "fake-gitlab-token"
+    assert (
+        provider_environment("git.example.test", "gitlab")["GITLAB_TOKEN"]
+        == "fake-gitlab-token"
+    )
 
 
 def test_gitlab_same_project_uses_two_metadata_requests(monkeypatch):
@@ -214,7 +224,11 @@ def test_malformed_json_is_safe_provider_error(monkeypatch):
         (None, None, "lacks a repository URL"),
         ("http://github.com/team/repo.git", None, "requested HTTPS host"),
         ("https://user:secret@github.com/team/repo.git", None, "requested HTTPS host"),
-        ("https://github.com/team/repo.git?q=secret", None, "unexpected URL parameters"),
+        (
+            "https://github.com/team/repo.git?q=secret",
+            None,
+            "unexpected URL parameters",
+        ),
         ("https://github.com/team/repo.git#secret", None, "unexpected URL parameters"),
         ("https://github.com/team/repo.git", "other/repo", "requested project"),
         ("https://github.com/team/../repo.git", None, "project path is invalid"),
@@ -228,6 +242,6 @@ def test_repository_url_validation_preserves_typed_safe_errors(url, project, mes
 
 
 def test_repository_url_normalizes_case_and_optional_git_suffix():
-    assert repository_url("https://GITHUB.com/Team/Repo", "github.com", "team/repo") == (
-        "https://github.com/Team/Repo.git"
-    )
+    assert repository_url(
+        "https://GITHUB.com/Team/Repo", "github.com", "team/repo"
+    ) == ("https://github.com/Team/Repo.git")

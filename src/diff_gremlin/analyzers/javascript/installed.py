@@ -49,5 +49,7 @@ def sibling_package(package: Path, name: str) -> Path | None:
     for parent in package.parents:
         if parent.name == "node_modules":
             candidate = parent / name
-            return candidate.resolve() if (candidate / "package.json").is_file() else None
+            return (
+                candidate.resolve() if (candidate / "package.json").is_file() else None
+            )
     return None

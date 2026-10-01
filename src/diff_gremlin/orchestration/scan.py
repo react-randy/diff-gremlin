@@ -32,7 +32,9 @@ def invoke(capability: Capability, context: ScanContext) -> list[StageResult]:
     return results
 
 
-def scan(snapshot: Snapshot, *, profile: str = "full", timeout: float = 120.0) -> ScanReport:
+def scan(
+    snapshot: Snapshot, *, profile: str = "full", timeout: float = 120.0
+) -> ScanReport:
     from diff_gremlin.analyzers.history import analyze_history
     from diff_gremlin.inventory import collect_inventory
     from diff_gremlin.process import run
@@ -58,7 +60,9 @@ def scan(snapshot: Snapshot, *, profile: str = "full", timeout: float = 120.0) -
         if profile == "full":
             stages.append(
                 analyze_history(
-                    context, snapshot.history_repo, revision=snapshot.identity.commit_sha or None
+                    context,
+                    snapshot.history_repo,
+                    revision=snapshot.identity.commit_sha or None,
                 )
             )
     return ScanReport(

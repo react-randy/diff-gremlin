@@ -27,7 +27,9 @@ def _verify_function_counts(seen: dict[str, int], functions: list[dict]) -> None
             raise ValueError("Lizard file count disagrees with function observations")
 
 
-def _python_declarations(files: tuple[SourceFile, ...], functions: list[dict]) -> list[dict]:
+def _python_declarations(
+    files: tuple[SourceFile, ...], functions: list[dict]
+) -> list[dict]:
     return [
         declaration
         for file in files
@@ -43,7 +45,9 @@ def _values(item: ET.Element, length: int) -> list[int]:
     return values
 
 
-def _functions(ctx: ScanContext, files: tuple[SourceFile, ...], measure: ET.Element) -> list[dict]:
+def _functions(
+    ctx: ScanContext, files: tuple[SourceFile, ...], measure: ET.Element
+) -> list[dict]:
     observations = {}
     for item in measure.findall("item"):
         name, location = item.attrib["name"].rsplit(" at ", 1)
@@ -69,7 +73,9 @@ def _functions(ctx: ScanContext, files: tuple[SourceFile, ...], measure: ET.Elem
     )
 
 
-def observations(ctx: ScanContext, files: tuple[SourceFile, ...], text: str) -> list[dict]:
+def observations(
+    ctx: ScanContext, files: tuple[SourceFile, ...], text: str
+) -> list[dict]:
     if "<!DOCTYPE" in text.upper() or "<!ENTITY" in text.upper():
         raise ValueError("unsupported XML declaration")
     root = ET.fromstring(text)

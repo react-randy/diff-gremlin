@@ -21,7 +21,9 @@ def number(stage: StageResult, key: str) -> float | None:
     return float(value) if math.isfinite(value) and value >= 0 else None
 
 
-def counted_score(stage: StageResult, key: str, bands: tuple[tuple[int, int], ...]) -> int | None:
+def counted_score(
+    stage: StageResult, key: str, bands: tuple[tuple[int, int], ...]
+) -> int | None:
     value = number(stage, key)
     return None if value is None else band_score(value, bands)
 
@@ -56,7 +58,9 @@ def stage_score(stage: StageResult) -> int | None:
         "lint": lambda: counted_score(stage, "issue_count", LINT_BANDS),
         "types": lambda: type_score(stage),
         "complexity": lambda: counted_score(stage, "max_cc", COMPLEXITY_BANDS),
-        "duplication": lambda: counted_score(stage, "duplication_percent", DUPLICATION_BANDS),
+        "duplication": lambda: counted_score(
+            stage, "duplication_percent", DUPLICATION_BANDS
+        ),
         "security": lambda: security_score(stage),
         "hygiene": lambda: hygiene_score(stage),
     }

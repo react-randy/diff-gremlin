@@ -13,7 +13,9 @@ def _regular_file(name: str, directory_fd: int, info: os.stat_result) -> bytes:
     fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory_fd)
     with os.fdopen(fd, "rb") as stream:
         if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
-            raise RuntimeError("Working source changed to a nonregular file during acquisition")
+            raise RuntimeError(
+                "Working source changed to a nonregular file during acquisition"
+            )
         content = stream.read(MAX_FILE_BYTES + 1)
     if len(content) > MAX_FILE_BYTES:
         raise RuntimeError("Working source file grew beyond acquisition byte limits")

@@ -24,7 +24,11 @@ def literal_part(part: dict) -> str | None:
 def literal_parts(parts: list[dict]) -> str | None:
     """Join static fragments internally; callers never publish argument values."""
     values = [literal_part(part) for part in parts]
-    return None if None in values else "".join(value for value in values if value is not None)
+    return (
+        None
+        if None in values
+        else "".join(value for value in values if value is not None)
+    )
 
 
 def command_string(args: list[dict]) -> bool:

@@ -15,14 +15,20 @@ class Gates:
 
 
 def threshold_failed(assessment: Assessment, threshold: float | None) -> bool:
-    return threshold is not None and assessment.score is not None and assessment.score < threshold
+    return (
+        threshold is not None
+        and assessment.score is not None
+        and assessment.score < threshold
+    )
 
 
 def severity_failed(stages: list[StageResult], severity: str | None) -> bool:
     if severity is None:
         return False
     floor = SEVERITY_ORDER[severity]
-    return any(SEVERITY_ORDER[f.severity] >= floor for stage in stages for f in stage.findings)
+    return any(
+        SEVERITY_ORDER[f.severity] >= floor for stage in stages for f in stage.findings
+    )
 
 
 def exit_code(assessment: Assessment, stages: list[StageResult], gates: Gates) -> int:

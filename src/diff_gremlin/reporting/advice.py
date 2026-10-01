@@ -29,7 +29,9 @@ def next_actions(report: ScanReport) -> list[str]:
     actions.extend(missing_actions(report))
     actions.extend(finding_actions(report))
     if report.omitted_stages:
-        actions.append("Run --profile full to include: " + ", ".join(report.omitted_stages))
+        actions.append(
+            "Run --profile full to include: " + ", ".join(report.omitted_stages)
+        )
     if not actions:
         actions.append(
             "Read the tests, dependency policy and maintainer history before adopting or merging."

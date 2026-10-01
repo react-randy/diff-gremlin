@@ -87,7 +87,9 @@ def context(tmp_path):
         ),
     ],
 )
-def test_python_lexical_observations_preserve_locations_and_safe_labels(context, source, expected):
+def test_python_lexical_observations_preserve_locations_and_safe_labels(
+    context, source, expected
+):
     result = analyze_execution(context([("sample.py", "python", source)]))
     assert result.status == "ok" and result.analyzed_files == result.eligible_files == 1
     assert [(f.rule, f.severity, f.line, f.symbol) for f in result.findings] == expected
@@ -108,9 +110,15 @@ def test_python_failed_file_preserves_other_observations_and_coverage(context, f
     elif failure == "encoding":
         ctx.files[1].path.write_bytes(b"\xff")
     elif failure == "large":
-        ctx = replace(ctx, files=(ctx.files[0], replace(ctx.files[1], size_bytes=1024 * 1024 + 1)))
+        ctx = replace(
+            ctx, files=(ctx.files[0], replace(ctx.files[1], size_bytes=1024 * 1024 + 1))
+        )
     result = analyze_execution(ctx)
-    assert result.status == "limited" and result.analyzed_files == 1 and result.eligible_files == 2
+    assert (
+        result.status == "limited"
+        and result.analyzed_files == 1
+        and result.eligible_files == 2
+    )
     assert [f.rule for f in result.findings] == ["python.eval"]
     assert "bad.py" in result.reason and "private argument" not in repr(result)
 
@@ -126,7 +134,9 @@ def test_js_parser_failure_preserves_python_observations(context, failure):
 
     def fail(command, **kwargs):
         if failure in {"timeout", "failed"}:
-            return RunResult(tuple(command), None if failure == "timeout" else 2, status=failure)
+            return RunResult(
+                tuple(command), None if failure == "timeout" else 2, status=failure
+            )
         data = (
             {}
             if failure == "malformed"
@@ -147,7 +157,11 @@ def test_js_parser_failure_preserves_python_observations(context, failure):
         return RunResult(tuple(command), 0, json.dumps(data))
 
     result = analyze_execution(replace(ctx, runner=fail))
-    assert result.status == "limited" and result.analyzed_files == 1 and result.eligible_files == 2
+    assert (
+        result.status == "limited"
+        and result.analyzed_files == 1
+        and result.eligible_files == 2
+    )
     assert [f.rule for f in result.findings] == ["python.eval"]
     assert "JS/TS" in result.reason
 
@@ -155,7 +169,11 @@ def test_js_parser_failure_preserves_python_observations(context, failure):
 def test_native_mixed_language_aggregation_keeps_unicode_pairs_separate(context):
     ctx = context(
         [
-            ("sample.py", "python", "# " + chr(0x202E) + '\neval("private argument")\n'),
+            (
+                "sample.py",
+                "python",
+                "# " + chr(0x202E) + '\neval("private argument")\n',
+            ),
             ("sample.ts", "typescript", 'eval("private argument");\n'),
             (
                 "Main.java",
@@ -167,7 +185,10 @@ def test_native_mixed_language_aggregation_keeps_unicode_pairs_separate(context)
         ]
     )
     result = analyze_execution(ctx)
-    assert result.status == "limited" and result.analyzed_files == result.eligible_files == 3
+    assert (
+        result.status == "limited"
+        and result.analyzed_files == result.eligible_files == 3
+    )
     assert result.metrics == {
         "call_count": 3,
         "actionable_count": 3,

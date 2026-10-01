@@ -43,7 +43,9 @@ def register_pipes(selector, process, input_bytes: bytes) -> None:
         selector.register(stream, selectors.EVENT_READ, (name, stream))
     if input_bytes:
         os.set_blocking(process.stdin.fileno(), False)
-        selector.register(process.stdin, selectors.EVENT_WRITE, ("stdin", process.stdin))
+        selector.register(
+            process.stdin, selectors.EVENT_WRITE, ("stdin", process.stdin)
+        )
     else:
         process.stdin.close()
 
@@ -71,7 +73,9 @@ def read_output(selector, key, budget: OutputBudget) -> bool:
     return budget.append(key.data[0], data)
 
 
-def drain(selector, budget: OutputBudget, input_bytes: bytes, deadline: float) -> ExecutionStatus:
+def drain(
+    selector, budget: OutputBudget, input_bytes: bytes, deadline: float
+) -> ExecutionStatus:
     offset = 0
     while selector.get_map():
         remaining = deadline - time.monotonic()

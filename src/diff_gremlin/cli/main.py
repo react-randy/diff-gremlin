@@ -19,7 +19,9 @@ def dispatch(args) -> tuple[str, int]:
             f"Policy {POLICY_VERSION}\nWeights: {WEIGHTS}\nRequired gaps produce unknown. Critical findings, CC>50, duplication>60% and missing license block.\nFull policy: https://github.com/react-randy/diff-gremlin/blob/main/docs/score-policy.md\nExits: 0 complete; 1 gate failure; 2 operation/usage error; 3 incomplete.\n",
             0,
         )
-    return commands.check(args) if args.command == "check" else commands.comparison(args)
+    return (
+        commands.check(args) if args.command == "check" else commands.comparison(args)
+    )
 
 
 def main(arguments: list[str] | None = None) -> int:
@@ -33,12 +35,14 @@ def main(arguments: list[str] | None = None) -> int:
         from diff_gremlin.reporting.escaping import plain
 
         print(
-            f"diff-gremlin: {args.command} failed: {plain(redact(str(error), {}))}", file=sys.stderr
+            f"diff-gremlin: {args.command} failed: {plain(redact(str(error), {}))}",
+            file=sys.stderr,
         )
         return 2
     except KeyboardInterrupt:
         print(
-            "diff-gremlin: interrupted; disposable scan resources were cleaned up", file=sys.stderr
+            "diff-gremlin: interrupted; disposable scan resources were cleaned up",
+            file=sys.stderr,
         )
         return 130
     sys.stdout.write(output)

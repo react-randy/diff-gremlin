@@ -23,7 +23,9 @@ def test_completed_nonzero_is_not_execution_failure():
     assert result.stdout == "diagnostic\n"
 
 
-def test_default_environment_drops_tokens_configuration_and_repo_path(tmp_path, monkeypatch):
+def test_default_environment_drops_tokens_configuration_and_repo_path(
+    tmp_path, monkeypatch
+):
     monkeypatch.setenv("GH_TOKEN", "fake-secret-token")
     monkeypatch.setenv("PYTHONPATH", str(tmp_path))
     monkeypatch.setenv("NODE_OPTIONS", "--require ./evil.js")
@@ -94,7 +96,9 @@ def test_large_input_is_drained_without_pipe_deadlock():
     assert result.stdout == "1000000\n"
 
 
-@pytest.mark.parametrize("kwargs", [{"timeout": 0}, {"timeout": float("nan")}, {"output_limit": 0}])
+@pytest.mark.parametrize(
+    "kwargs", [{"timeout": 0}, {"timeout": float("nan")}, {"output_limit": 0}]
+)
 def test_bounds_are_required(kwargs):
     with pytest.raises(ValueError):
         run([sys.executable], **kwargs)
@@ -122,7 +126,9 @@ def test_acquisition_resource_launcher_limits_child_files(tmp_path):
     assert output.stat().st_size <= 1024
 
 
-def test_absolute_caller_path_cannot_supply_a_fake_tool_after_snapshotting(tmp_path, monkeypatch):
+def test_absolute_caller_path_cannot_supply_a_fake_tool_after_snapshotting(
+    tmp_path, monkeypatch
+):
     caller = tmp_path / "caller" / "node_modules" / ".bin"
     caller.mkdir(parents=True)
     wrapper = caller / "repository-supplied-analyzer"
@@ -147,7 +153,9 @@ def test_symlinked_python_retains_its_virtual_environment(tmp_path):
 
     environment = tmp_path / "tool-env"
     venv.EnvBuilder(with_pip=False, symlinks=True).create(environment)
-    executable = environment / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    executable = environment / (
+        "Scripts/python.exe" if os.name == "nt" else "bin/python"
+    )
     result = run([str(executable), "-c", "import sys;print(sys.prefix)"])
     assert result.status == "ok" and result.returncode == 0
     assert Path(result.stdout.strip()) == environment

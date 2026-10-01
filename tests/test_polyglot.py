@@ -34,7 +34,9 @@ def runner(command, *, cwd, timeout, **kwargs):
             timeout=timeout,
             check=False,
         )
-        return RunResult(tuple(command), result.returncode, result.stdout, result.stderr)
+        return RunResult(
+            tuple(command), result.returncode, result.stdout, result.stderr
+        )
     except FileNotFoundError:
         return RunResult(tuple(command), None, status="missing")
 
@@ -151,7 +153,9 @@ def test_typescript_true_zero_errors_and_dependency_limit(context):
         context([("bad.ts", "typescript", 'export const answer: number = "bad";')])
     )
     assert bad.status == "ok" and bad.metrics["error_count"] == 1
-    assert any(f.rule == "TS2322" and f.path == "bad.ts" and f.line == 1 for f in bad.findings)
+    assert any(
+        f.rule == "TS2322" and f.path == "bad.ts" and f.line == 1 for f in bad.findings
+    )
     missing = analyze_ts_types(
         context(
             [
@@ -238,7 +242,9 @@ def test_eslint_preserves_custom_rule_intent(context):
         "no-self-assign",
     } <= rules
     assert result.metrics["issue_count"] == len(result.findings)
-    clean = analyze_js_lint(context([("good.ts", "typescript", "export const answer = 42;")]))
+    clean = analyze_js_lint(
+        context([("good.ts", "typescript", "export const answer = 42;")])
+    )
     assert clean.status == "ok" and clean.metrics["issue_count"] == 0
 
 
@@ -255,7 +261,10 @@ def test_jscpd_fresh_zero_and_actual_clones(context):
         context([("a.ts", "typescript", source), ("b.ts", "typescript", source)])
     )
     assert clones.status == "ok", clones.reason
-    assert clones.metrics["duplication_percent"] == 50 and clones.metrics["clone_groups"] == 1
+    assert (
+        clones.metrics["duplication_percent"] == 50
+        and clones.metrics["clone_groups"] == 1
+    )
     assert {finding.path for finding in clones.findings} == {"a.ts", "b.ts"}
 
 
@@ -287,7 +296,9 @@ def test_java_modern_ast_ignores_comment_and_string_decoys(context):
     assert result.metrics["type_count"] == 2 and result.metrics["method_count"] == 3
     calls = [f for f in result.findings if f.rule == "java.runtime-exec"]
     assert len(calls) == 1 and calls[0].line == 4
-    broken = analyze_java_structure(context([("Broken.java", "java", "class Broken { void x( }")]))
+    broken = analyze_java_structure(
+        context([("Broken.java", "java", "class Broken { void x( }")])
+    )
     assert broken.status == "ok" and broken.metrics["error_count"] > 0
     assert any(f.rule == "java.syntax" for f in broken.findings)
 
@@ -295,11 +306,15 @@ def test_java_modern_ast_ignores_comment_and_string_decoys(context):
 def test_java_standalone_types_clean_error_and_missing_dependencies(context):
     require_tools("javac", "java")
     clean = analyze_java_types(
-        context([("Good.java", "java", "public class Good { int value() { return 1; } }")])
+        context(
+            [("Good.java", "java", "public class Good { int value() { return 1; } }")]
+        )
     )
     assert clean.status == "ok" and clean.metrics["error_count"] == 0
     bad = analyze_java_types(
-        context([("Bad.java", "java", 'public class Bad { int value() { return "bad"; } }')])
+        context(
+            [("Bad.java", "java", 'public class Bad { int value() { return "bad"; } }')]
+        )
     )
     assert bad.status == "ok" and bad.metrics["error_count"] > 0
     assert bad.findings[0].path == "Bad.java"
@@ -335,7 +350,9 @@ def test_current_jscpd_schema_and_file_count_must_be_valid(context, total):
         if "--output" in command:
             report = Path(command[command.index("--output") + 1]) / "jscpd-report.json"
             report.parent.mkdir()
-            report.write_text(json.dumps({"statistics": {"total": total}, "duplicates": []}))
+            report.write_text(
+                json.dumps({"statistics": {"total": total}, "duplicates": []})
+            )
         return RunResult(tuple(command), 0)
 
     result = analyze_js_duplication(
@@ -361,7 +378,9 @@ def test_java_reflective_and_unsafe_vocabulary_requires_actual_calls(context):
     assert {f.line for f in result.findings} == {4}
 
 
-def test_caller_path_executable_outside_snapshot_is_never_trusted(context, tmp_path, monkeypatch):
+def test_caller_path_executable_outside_snapshot_is_never_trusted(
+    context, tmp_path, monkeypatch
+):
     ctx = context([("a.ts", "typescript", "export const value = 1;")])
     caller = tmp_path / "caller-bin"
     caller.mkdir()
@@ -413,10 +432,14 @@ def test_native_js_complexity_hotspot_and_inline_suppression_control(context):
 
 def test_native_js_complexity_zero_functions_and_syntax_failure(context):
     require_tools("node", "eslint", "tsc")
-    zero = analyze_js_complexity(context([("a.js", "javascript", "export const value = 1;")]))
+    zero = analyze_js_complexity(
+        context([("a.js", "javascript", "export const value = 1;")])
+    )
     assert zero.status == "ok" and zero.metrics["functions"] == 0
     assert zero.metrics["max_cc"] == 0 and zero.metrics["average_cc"] == 0
-    syntax = analyze_js_complexity(context([("broken.ts", "typescript", "function broken(")]))
+    syntax = analyze_js_complexity(
+        context([("broken.ts", "typescript", "function broken(")])
+    )
     assert syntax.status == "limited" and syntax.metrics == {}
 
 
@@ -455,7 +478,9 @@ def test_native_js_complexity_covers_implicit_class_code_paths(context):
         },
     ],
 )
-def test_native_js_complexity_rejects_incomplete_or_malformed_evidence(context, payload):
+def test_native_js_complexity_rejects_incomplete_or_malformed_evidence(
+    context, payload
+):
     require_tools("node", "eslint", "tsc")
 
     def fake(command, **kwargs):
@@ -464,7 +489,9 @@ def test_native_js_complexity_rejects_incomplete_or_malformed_evidence(context, 
             tuple(command), 0, json.dumps({"files": [file], "findings": [], **payload})
         )
 
-    result = analyze_js_complexity(context([("a.js", "javascript", "function run() {}")], fake))
+    result = analyze_js_complexity(
+        context([("a.js", "javascript", "function run() {}")], fake)
+    )
     assert result.status == "failed" and result.metrics == {}
 
 
