@@ -8,7 +8,7 @@ The package needs no model API or model-specific configuration.
 | --- | --- | --- |
 | Python lint | Ruff 0.16.8 | Located diagnostics under scanner-owned settings |
 | Python types | Pyrefly 1.3.0 | Isolated static type checks; uninstalled external imports can limit evidence |
-| Python health/clones/dead code | PyScn 1.32.1 | Validated stdout JSON; optional platform wheel; full profile only |
+| Python health/clones/dead code | PyScn 1.32.1 | Separate independent dead-code evidence and combined clone/health evidence; one shared deadline; full profile only |
 | Python and other recognized language complexity | Lizard 1.24.0 | One observation per production function; Python AST accounts for branch-free ellipsis declarations; parser limits remain visible |
 | JavaScript/TypeScript complexity | ESLint 10.11.0 | Native classic function and class initializer/static-block code paths, with independent coverage counts |
 | Python maintainability | Radon 6.0.1 | Informational MI from the shipped driver; full profile only |
@@ -20,7 +20,7 @@ The package needs no model API or model-specific configuration.
 | Shell syntax/complexity | shfmt 3.14.1 | Declared POSIX sh/dash, Bash and mksh; bounded validated AST; function decision estimate v1 |
 | Contextual security | Shipped source checks | Located Unicode/execution observations; no blanket penalty for ordinary subprocess use |
 | Hygiene | Shipped inventory checks | License, README, observed test files, gitignore; presence does not prove quality |
-| Python history | Shipped bounded Git/AST checks | Informational complexity samples at immutable revisions; full profile only |
+| Python history | Shipped bounded Git/AST checks | Immutable samples, metadata-sized blob batches, up to 20,000 files/256 MiB per commit and 8 MiB per file; full profile only |
 
 Mixed repositories retain distinct stage IDs. Unsupported languages can receive
 applicable inventory/security/hygiene evidence; this is not a full lint/type check

@@ -5,6 +5,7 @@ from pathlib import Path
 
 from diff_gremlin.analyzers.history_measure import commit_observations
 from diff_gremlin.analyzers.history_objects import (
+    HistoryEntry,
     blob_contents,
     is_object_id,
     python_entries,
@@ -50,7 +51,11 @@ class HistoryReader:
         self.deadline = time.monotonic() + ctx.timeout
 
     def git(
-        self, *args: str, input_text: str | None = None, allow_missing: bool = False
+        self,
+        *args: str,
+        input_text: str | None = None,
+        allow_missing: bool = False,
+        output_limit: int = 4 * 1024 * 1024,
     ) -> str:
         remaining = self.deadline - time.monotonic()
         if remaining <= 0:
@@ -71,6 +76,7 @@ class HistoryReader:
             cwd=self.ctx.scratch,
             timeout=remaining,
             input_text=input_text,
+            output_limit=output_limit,
             data_output=bool(args and args[0] == "cat-file"),
         )
         return checked_output(result, allow_missing)
@@ -103,13 +109,27 @@ class HistoryReader:
         return anchor
 
     def commit_contents(self, sha: str) -> list[str]:
-        entries = python_entries(self.git("ls-tree", "-r", "-z", sha))
-        if not entries:
-            return []
+        entries = python_entries(self.git("ls-tree", "-r", "-z", "-l", sha))
+        contents = []
+        batch = []
+        size = 0
+        for entry in entries:
+            if batch and (size + entry.size > 1024 * 1024 or len(batch) >= 64):
+                contents.extend(self.batch_contents(batch))
+                batch, size = [], 0
+            batch.append(entry)
+            size += entry.size
+        if batch:
+            contents.extend(self.batch_contents(batch))
+        return contents
+
+    def batch_contents(self, entries: list[HistoryEntry]) -> list[str]:
+        """Bound one exact metadata-sized blob batch within the shared deadline."""
         result = self.git(
             "cat-file",
             "--batch",
-            input_text="".join(f"{blob}\n" for blob, _ in entries),
+            input_text="".join(f"{entry.oid}\n" for entry in entries),
+            output_limit=sum(entry.size for entry in entries) + len(entries) * 128 + 1,
         )
         return blob_contents(result, entries)
 

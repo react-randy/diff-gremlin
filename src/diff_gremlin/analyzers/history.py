@@ -3,7 +3,7 @@
 from functools import partial
 from pathlib import Path
 
-from diff_gremlin.analyzers.history_objects import is_object_id
+from diff_gremlin.analyzers.history_objects import HistoryLimitError, is_object_id
 from diff_gremlin.analyzers.history_reader import HistoryReader
 from diff_gremlin.analyzers.status import unavailable
 from diff_gremlin.analyzers.versions import tool_version
@@ -90,6 +90,8 @@ def analyze_history(
         return failure(
             reason="Bounded Git history analysis timed out", status="timeout"
         )
+    except HistoryLimitError as error:
+        return failure(reason=str(error), status="limited")
     except (ValueError, UnicodeError, SyntaxError, RecursionError, MemoryError):
         return failure(
             reason="Git history or Python object analysis failed validation",

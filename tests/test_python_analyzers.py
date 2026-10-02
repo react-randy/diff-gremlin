@@ -242,7 +242,7 @@ def test_pyrefly_wrong_diagnostic_schema(tmp_path, diagnostic):
     assert result.status == "failed" and not result.metrics
 
 
-def test_pyscn_zero_is_known_and_one_analysis_supplies_three_stages(tmp_path):
+def test_pyscn_zero_is_known_and_independent_deadcode_is_preserved(tmp_path):
     runner = FakeRunner(json.dumps(pyscn_data()))
     ctx = make_context(tmp_path, runner)
     stages = analyze_pyscn(ctx)
@@ -250,7 +250,7 @@ def test_pyscn_zero_is_known_and_one_analysis_supplies_three_stages(tmp_path):
     assert stages[0].metrics == {"health_score": 0.0} and not stages[0].required
     assert stages[1].metrics == {"duplication_percent": 0.0, "clone_groups": 0}
     assert stages[2].metrics == {"issue_count": 0}
-    assert sum("analyze" in command for command, _ in runner.calls) == 1
+    assert sum("analyze" in command for command, _ in runner.calls) == 2
     command, kwargs = runner.calls[0]
     assert (
         command[command.index("--output") + 1] == "-" and kwargs["cwd"] == ctx.scratch
@@ -502,6 +502,31 @@ def test_pyscn_partial_coverage_is_visible(tmp_path):
         and stage.eligible_files == 2
         for stage in stages
     )
+
+
+def test_pyscn_clone_timeout_retains_independent_native_deadcode(tmp_path):
+    data = pyscn_data()
+    data["summary"]["clone_enabled"] = False
+    calls = []
+
+    def runner(command, **kwargs):
+        if "--version" in command:
+            return RunResult(tuple(command), 0, "pyscn 1.32.1")
+        calls.append((list(command), kwargs))
+        if command[command.index("--select") + 1] == "complexity,deadcode":
+            return RunResult(tuple(command), 0, json.dumps(data))
+        return RunResult(tuple(command), None, status="timeout")
+
+    ctx = make_context(tmp_path, runner)
+    stages = analyze_pyscn(ctx)
+    assert [stage.status for stage in stages] == ["timeout", "timeout", "ok"]
+    assert stages[2].analyzed_files == stages[2].eligible_files == 1
+    assert stages[2].metrics == {"issue_count": 0}
+    assert not stages[0].metrics and not stages[1].metrics
+    assert "--timeout" in stages[1].reason
+    assert 0 < calls[1][1]["timeout"] <= calls[0][1]["timeout"]
+    assert calls[0][1]["data_output"] is True
+    assert calls[0][1]["output_limit"] == 64 * 1024 * 1024
 
 
 def test_pyscn_deadcode_invalid_summary_cannot_be_clean(tmp_path):
