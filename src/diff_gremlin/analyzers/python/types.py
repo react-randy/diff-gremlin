@@ -22,6 +22,7 @@ from diff_gremlin.domain.process import RunResult
 from diff_gremlin.domain.stages import StageResult
 
 _ID = "python.types.pyrefly"
+_MAX_DIAGNOSTIC_BYTES = 64 * 1024 * 1024
 
 
 def _config(root: Path) -> str:
@@ -98,6 +99,7 @@ def _run_pyrefly(ctx: ScanContext, files: tuple[SourceFile, ...]) -> RunResult:
                 *(str(file.path) for file in files),
             ],
             cwd=ctx.scratch,
+            output_limit=_MAX_DIAGNOSTIC_BYTES,
         )
 
 
@@ -148,6 +150,11 @@ def analyze_python_types(ctx: ScanContext) -> StageResult:
     except OSError:
         return failure(
             reason="Could not create controlled Pyrefly configuration", status="failed"
+        )
+    if result.status == "output_limit":
+        return failure(
+            reason="Pyrefly diagnostic output exceeded its 64 MiB budget; no complete type evidence",
+            status="limited",
         )
     status = execution_status(result, (0, 1))
     if status is not None:

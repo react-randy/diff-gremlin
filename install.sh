@@ -2,10 +2,10 @@
 # Install the pinned Diff Gremlin release into a user-local uv tool environment.
 set -eu
 
-VERSION=1.0.2
+VERSION=1.0.3
 UV_VERSION=0.12.18
 PYTHON_VERSION=3.12.12
-RELEASE_URL=https://github.com/react-randy/diff-gremlin/releases/download/v1.0.2
+RELEASE_URL=https://github.com/react-randy/diff-gremlin/releases/download/v1.0.3
 # The release owner fills this after building the final wheel. Never bypass this gate.
 RELEASE_WHEEL_SHA256=REPLACE_WITH_FINAL_RELEASE_WHEEL_SHA256
 CORE_LOCK_SHA256=c20982ad0e9a87d533b0c90333cf121590b2708467aa0f8d5a9a91f6d996be1a

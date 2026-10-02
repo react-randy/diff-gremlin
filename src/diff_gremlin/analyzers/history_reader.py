@@ -83,10 +83,19 @@ class HistoryReader:
 
     def is_repository(self) -> bool:
         inside = self.git("rev-parse", "--is-inside-work-tree").strip()
-        return (
-            inside == "true"
-            or self.git("rev-parse", "--is-bare-repository").strip() == "true"
-        )
+        if inside == "true":
+            return self.is_selected_root("--show-toplevel")
+        if inside != "false":
+            raise ValueError("invalid history worktree metadata")
+        bare = self.git("rev-parse", "--is-bare-repository").strip()
+        if bare not in ("true", "false"):
+            raise ValueError("invalid history repository metadata")
+        return bare == "true" and self.is_selected_root("--absolute-git-dir")
+
+    def is_selected_root(self, option: str) -> bool:
+        """Never borrow a worktree or bare repository from an ancestor."""
+        selected = Path(self.git("rev-parse", option).strip())
+        return selected.is_absolute() and selected.resolve() == self.repo.resolve()
 
     def is_shallow(self) -> bool:
         value = self.git("rev-parse", "--is-shallow-repository").strip()

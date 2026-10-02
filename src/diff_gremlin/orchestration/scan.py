@@ -32,10 +32,31 @@ def invoke(capability: Capability, context: ScanContext) -> list[StageResult]:
     return results
 
 
+def history_stage(snapshot: Snapshot, context: ScanContext) -> StageResult:
+    """Only a captured repository can supply the snapshot's Git history."""
+    from diff_gremlin.analyzers.history import analyze_history
+    from diff_gremlin.analyzers.status import unavailable
+
+    if snapshot.history_repo is None:
+        return unavailable(
+            "history.git",
+            "Python complexity history",
+            "history",
+            "git",
+            required=False,
+            reason="No Git history was captured for this source",
+            status="unsupported",
+        )
+    return analyze_history(
+        context,
+        snapshot.history_repo,
+        revision=snapshot.identity.commit_sha or None,
+    )
+
+
 def scan(
     snapshot: Snapshot, *, profile: str = "full", timeout: float = 120.0
 ) -> ScanReport:
-    from diff_gremlin.analyzers.history import analyze_history
     from diff_gremlin.inventory import collect_inventory
     from diff_gremlin.process import run
 
@@ -59,13 +80,7 @@ def scan(
             if profile == "full" or not capability.full_only:
                 stages.extend(invoke(capability, context))
         if profile == "full":
-            stages.append(
-                analyze_history(
-                    context,
-                    snapshot.history_repo,
-                    revision=snapshot.identity.commit_sha or None,
-                )
-            )
+            stages.append(history_stage(snapshot, context))
     return ScanReport(
         snapshot.identity,
         profile,

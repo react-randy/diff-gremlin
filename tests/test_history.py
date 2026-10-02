@@ -29,6 +29,8 @@ class HistoryRunner:
             output = "git version 2.43.0"
         elif "--is-inside-work-tree" in command:
             output = "true\n"
+        elif "--show-toplevel" in command:
+            output = command[command.index("-C") + 1] + "\n"
         elif "--is-shallow-repository" in command:
             output = "true\n" if self.shallow else "false\n"
         elif "--verify" in command:
@@ -276,3 +278,40 @@ def test_history_blob_size_must_match_captured_metadata():
 
     with pytest.raises(ValueError, match="captured size"):
         blob_contents(f"{_BLOB} blob 2\nx\n", [HistoryEntry(_BLOB, "a.py", 1)])
+
+
+def test_native_history_rejects_an_ancestor_worktree(tmp_path):
+    ctx = make_context(tmp_path, native_runner)
+    git(tmp_path, "init", "--initial-branch=main")
+    commit(tmp_path, "def ancestor():\n    return 1\n")
+    result = analyze_history(ctx)
+    assert result.status == "unsupported" and not result.metrics
+    assert "root differs" in result.reason
+
+
+def test_native_history_rejects_a_directory_inside_an_ancestor_bare_repo(tmp_path):
+    ctx = make_context(tmp_path, native_runner)
+    git(tmp_path, "init", "--bare", "--initial-branch=main")
+    result = analyze_history(ctx)
+    assert result.status == "unsupported" and not result.metrics
+    assert "root differs" in result.reason
+
+
+def test_plain_source_snapshot_has_no_ancestor_history(tmp_path, monkeypatch):
+    import tempfile
+
+    from diff_gremlin.acquisition.snapshots import acquire_source
+    from diff_gremlin.orchestration.scan import scan
+
+    ctx = make_context(tmp_path, native_runner)
+    git(tmp_path, "init", "--initial-branch=main")
+    commit(tmp_path, "def ancestor():\n    return 1\n")
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path))
+    before = git(tmp_path, "status", "--porcelain")
+    with acquire_source(str(ctx.root)) as snapshot:
+        assert snapshot.history_repo is None and not snapshot.identity.commit_sha
+        report = scan(snapshot, profile="full", timeout=30)
+    history = next(stage for stage in report.stages if stage.id == "history.git")
+    assert history.status == "unsupported" and not history.metrics
+    assert "No Git history was captured" in history.reason
+    assert git(tmp_path, "status", "--porcelain") == before

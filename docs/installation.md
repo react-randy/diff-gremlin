@@ -13,13 +13,13 @@ available for development.
 ## Curl installer
 
 ```sh
-curl -fsSL https://github.com/react-randy/diff-gremlin/releases/download/v1.0.2/install.sh | sh
+curl -fsSL https://github.com/react-randy/diff-gremlin/releases/download/v1.0.3/install.sh | sh
 ```
 
 For inspection before execution, download the same pinned release file:
 
 ```sh
-curl -fsSLO https://github.com/react-randy/diff-gremlin/releases/download/v1.0.2/install.sh
+curl -fsSLO https://github.com/react-randy/diff-gremlin/releases/download/v1.0.3/install.sh
 less install.sh
 sh install.sh
 ```
@@ -69,9 +69,9 @@ Docker targets Linux amd64/arm64 and supplies a compatible glibc runtime.
 ## Docker
 
 ```sh
-docker run --rm ghcr.io/react-randy/diff-gremlin:1.0.2 doctor
-docker run --rm ghcr.io/react-randy/diff-gremlin:1.0.2 check https://github.com/OWNER/REPO
-docker run --rm ghcr.io/react-randy/diff-gremlin:1.0.2 pr https://github.com/OWNER/REPO/pull/123
+docker run --rm ghcr.io/react-randy/diff-gremlin:1.0.3 doctor
+docker run --rm ghcr.io/react-randy/diff-gremlin:1.0.3 check https://github.com/OWNER/REPO
+docker run --rm ghcr.io/react-randy/diff-gremlin:1.0.3 pr https://github.com/OWNER/REPO/pull/123
 ```
 
 The image runs as UID/GID 10001. It includes the pinned Python, Node, JDK 25, and
@@ -85,7 +85,7 @@ For a local repo, including paths with spaces:
 docker run --rm --read-only --cap-drop=ALL --security-opt=no-new-privileges \
   --network=none --tmpfs /tmp:rw,nosuid,nodev,size=1g \
   --mount "type=bind,src=$PWD,dst=/workspace,readonly" \
-  ghcr.io/react-randy/diff-gremlin:1.0.2 check /workspace --format json
+  ghcr.io/react-randy/diff-gremlin:1.0.3 check /workspace --format json
 ```
 
 The non-root account must be able to read the mounted files. If the repository
@@ -100,7 +100,7 @@ This exact release URI avoids assuming a public package registry entry:
 
 ```sh
 uvx --no-build --exclude-newer 2026-09-24 \
-  --from 'https://github.com/react-randy/diff-gremlin/releases/download/v1.0.2/diff_gremlin-1.0.2-py3-none-any.whl' \
+  --from 'https://github.com/react-randy/diff-gremlin/releases/download/v1.0.3/diff_gremlin-1.0.3-py3-none-any.whl' \
   diff-gremlin check . --profile quick
 ```
 

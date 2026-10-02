@@ -76,7 +76,10 @@ def analyze_history(
     reader = HistoryReader(ctx, history_repo if history_repo is not None else ctx.root)
     try:
         if not reader.is_repository():
-            raise ValueError("history source is not a Git repository")
+            return failure(
+                reason="History repository root differs from the selected source",
+                status="unsupported",
+            )
         shallow = reader.is_shallow()
         anchor = reader.revision(revision)
         if not anchor:

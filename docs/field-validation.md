@@ -228,3 +228,27 @@ Use `--profile quick` for the first pass. A missing or rejected measurement does
 not become a clean result; the provisional observed score includes only valid,
 complete contributing stages and shows its category weight and required-stage
 coverage. Clone incidence is not a unique-line percentage.
+
+### Public-install history provenance correction (1.0.3)
+
+The actual 1.0.2 installer fixture was a plain folder under an unrelated Git
+worktree. When its temporary snapshot also lived under that worktree, Git's
+ancestor discovery returned unrelated history with an empty source commit
+identity. This informational history did not affect scores, but its provenance
+was wrong. Issue #52 tracks the correction: ordinary snapshots expose only
+captured history, and the history reader validates the exact selected worktree
+or bare-repository root before reading logs or source blobs. Native regressions
+cover ancestor worktrees, ancestor bare repositories and the full acquisition
+and scan path. Previously captured 1.0.2 receipts above remain historical evidence.
+
+### Public-installed Python type evidence correction (1.0.3)
+
+Issue #54 records a public 1.0.2 Hindsight type-transport failure: the same 973
+Python source files produce 4,414,210 bytes of native Pyrefly JSON at the actual
+acquisition path length, exceeding the old 4 MiB combined-output budget. A
+controlled finite 64 MiB run completed in 3.249 seconds, validated all 973 files
+and retained 4,469 diagnostics (3,955 missing imports). It remained LIMITED;
+missing dependencies were never converted into a pass. The native regression
+uses long captured paths and thousands of absent imports; a separate exhaustion
+control preserves an empty, named incomplete result. This bounded transport
+correction joins the history provenance fix in patch 1.0.3.

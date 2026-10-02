@@ -3,6 +3,7 @@
 import json
 import time
 from dataclasses import asdict, replace
+from types import SimpleNamespace
 
 import pytest
 
@@ -610,12 +611,21 @@ def test_output_exhaustion_mid_file_cannot_accept_oversized_tree(tmp_path, monke
     assert "output byte budget exhausted; omitted 1 eligible files" in stage.reason
 
 
-def test_native_cumulative_deadline_bounds_selected_files(tmp_path):
+def test_native_cumulative_deadline_bounds_selected_files(tmp_path, monkeypatch):
     files = {f"{i}.sh": "#!/bin/bash\nprintf ok\n" for i in range(20)}
-    ctx = replace(context(tmp_path, files), timeout=0.05)
-    start = time.monotonic()
+    clock = Clock()
+    timeouts = []
+
+    def timed_native_runner(command, **kwargs):
+        result = run(command, **kwargs)
+        timeouts.append(kwargs["timeout"])
+        clock.value += 1 if command[-1] == "--version" else 2
+        return result
+
+    # Control only the adapter's clock; native process deadlines stay real.
+    monkeypatch.setattr(parser, "time", SimpleNamespace(monotonic=clock.monotonic))
+    ctx = replace(context(tmp_path, files), timeout=3, runner=timed_native_runner)
     stage = analyze_shell_syntax(ctx)
-    elapsed = time.monotonic() - start
-    assert elapsed < 1, elapsed
-    assert stage.status != "ok" and stage.analyzed_files < stage.eligible_files == 20
-    assert "time budget exhausted" in stage.reason, stage.reason
+    assert stage.status == "limited" and stage.analyzed_files == 1
+    assert stage.eligible_files == 20 and timeouts == [3, 2]
+    assert "time budget exhausted; omitted 19 eligible files" in stage.reason
