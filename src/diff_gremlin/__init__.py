@@ -1,3 +1,3 @@
 """Static risk checks for repositories and pull requests."""
 
-__version__ = "1.0.2"
+__version__ = "1.0.3"
