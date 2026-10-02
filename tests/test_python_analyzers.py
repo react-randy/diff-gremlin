@@ -128,7 +128,12 @@ def test_execution_failure_never_clean(tmp_path, adapter, status, code):
     ctx = make_context(tmp_path, FakeRunner("", code, status))
     result = adapter(ctx)
     stages = result if isinstance(result, list) else [result]
-    assert all(stage.status in ("timeout", "missing", "failed") for stage in stages)
+    allowed = (
+        ("limited",)
+        if adapter is analyze_python_types and status == "output_limit"
+        else ("timeout", "missing", "failed")
+    )
+    assert all(stage.status in allowed for stage in stages)
     assert all(stage.metrics == {} and stage.analyzed_files == 0 for stage in stages)
 
 
@@ -587,3 +592,38 @@ def test_tool_version_rejects_failed_identity_output(tmp_path, status, code):
         return RunResult(tuple(command), code, "javac 25.0.4.1", status=status)
 
     assert tool_version(make_context(tmp_path, runner), "javac") == ""
+
+
+def test_native_pyrefly_large_path_diagnostics_retain_missing_import_evidence(tmp_path):
+    from diff_gremlin.policy.metrics import stage_score
+    from diff_gremlin.process import run
+
+    directory = tmp_path / ("a" * 180) / ("b" * 180)
+    directory.mkdir(parents=True)
+    calls = []
+
+    def observed(command, **kwargs):
+        result = run(command, **kwargs)
+        if "check" in command:
+            calls.append((len(result.stdout.encode()), kwargs["output_limit"]))
+        return result
+
+    source = "".join(f"import diff_gremlin_absent_dependency_{i}\n" for i in range(4000))
+    ctx = make_context(directory, observed, {"a.py": source})
+    result = analyze_python_types(ctx)
+    assert calls[0][0] > 4 * 1024 * 1024
+    assert calls[0][1] == 64 * 1024 * 1024
+    assert result.status == "limited" and result.analyzed_files == 1
+    assert result.eligible_files == 1 and result.metrics["error_count"] >= 4000
+    assert len(result.findings) >= 4000 and stage_score(result) is None
+    assert (ctx.root / "a.py").read_text() == source
+
+
+def test_pyrefly_new_output_budget_is_named_and_never_clean(tmp_path):
+    from diff_gremlin.policy.metrics import stage_score
+
+    runner = FakeRunner("", 0, "output_limit")
+    result = analyze_python_types(make_context(tmp_path, runner))
+    assert result.status == "limited" and "64 MiB budget" in result.reason
+    assert result.analyzed_files == 0 and not result.metrics and not result.findings
+    assert stage_score(result) is None

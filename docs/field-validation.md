@@ -240,3 +240,15 @@ captured history, and the history reader validates the exact selected worktree
 or bare-repository root before reading logs or source blobs. Native regressions
 cover ancestor worktrees, ancestor bare repositories and the full acquisition
 and scan path. Previously captured 1.0.2 receipts above remain historical evidence.
+
+### Public-installed Python type evidence correction (1.0.3)
+
+Issue #54 records a public 1.0.2 Hindsight type-transport failure: the same 973
+Python source files produce 4,414,210 bytes of native Pyrefly JSON at the actual
+acquisition path length, exceeding the old 4 MiB combined-output budget. A
+controlled finite 64 MiB run completed in 3.249 seconds, validated all 973 files
+and retained 4,469 diagnostics (3,955 missing imports). It remained LIMITED;
+missing dependencies were never converted into a pass. The native regression
+uses long captured paths and thousands of absent imports; a separate exhaustion
+control preserves an empty, named incomplete result. This bounded transport
+correction joins the history provenance fix in patch 1.0.3.

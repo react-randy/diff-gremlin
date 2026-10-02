@@ -183,3 +183,10 @@ Analyzer processes receive a clean temporary HOME/config/cache, no provider toke
 and controlled settings. uv provides dependency isolation; it does not provide an
 OS sandbox. The Docker image runs non-root. Read-only mounts, dropped capabilities,
 no host socket/home, and disabled local-scan network further restrict it.
+
+Native Pyrefly JSON diagnostics have a finite 64 MiB transport budget. Missing
+imports can repeat long snapshot/search paths across thousands of messages;
+the old shared 4 MiB cap discarded valid evidence for normal repositories.
+Exhausting the type-specific budget is explicitly limited and supplies no clean
+score. Target imports remain uninstalled and unresolved dependencies remain
+visible even when all diagnostic rows validate.
