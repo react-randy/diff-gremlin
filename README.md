@@ -58,8 +58,8 @@ completed. [Usage and private repositories →](docs/usage.md)
 ## Evaluate a repository
 
 ```sh
-diff-gremlin check https://github.com/OWNER/REPO
 diff-gremlin check https://github.com/OWNER/REPO --profile quick
+diff-gremlin check https://github.com/OWNER/REPO --profile full
 diff-gremlin check . --ref HEAD
 diff-gremlin check . --format json > receipt.json
 ```
@@ -68,6 +68,10 @@ A local check reads current files, including uncommitted work. `--ref` selects a
 Git snapshot. The receipt records source identity, profile, policy version, tools,
 findings, and missing evidence. Share the receipt alongside your adoption review;
 then inspect dependencies, tests, and project ownership yourself.
+
+Start with quick for a first look. Full adds clone searches and history, which
+can take minutes on a large repo. Ordinary binary assets stay outside text
+analysis; omitted possible source and analyzer limits appear in the receipt.
 
 ## Read the verdict
 

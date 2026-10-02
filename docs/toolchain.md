@@ -65,8 +65,18 @@ zero clones. A five-line source below the token window can have genuine zero clo
 observations; this does not prove that shorter similarities are absent.
 
 Clone ranges must fit the copied source, including UTF-16 columns and native line
-boundaries. Invalid, stale or oversized reports fail the check; report reads are
-capped at 4 MiB. The raw native report and source fragments are never published.
+boundaries. The measure `jscpd-native-clone-incidence-v1` sums native clone
+incidences; it is not the share of unique duplicated lines. Overlapping clones
+can make a per-source incidence percentage exceed 100. Counter/ratio checks and
+the trusted tokenizer's embedded-format catalog validate this native behavior.
+
+jscpd 4.2.3 can produce impossible second clone endpoints while extending a
+match across sources. Recognized coordinate-invalid records are counted and
+rejected; verified clone findings remain visible with **limited** evidence.
+When this occurs, the native incidence percentage is unscored telemetry and
+`duplication_percent` is absent. No location is repaired or reordered. Foreign
+identities, malformed schemas, stale or oversized reports still fail the check;
+report reads are capped at 4 MiB. Raw reports and source fragments are private.
 
 ## Python delivery
 

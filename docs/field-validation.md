@@ -159,3 +159,72 @@ Replace the URL and full commit with any table entry. Save the exit status along
 with the JSON. Acquisition errors may produce no JSON; incomplete evidence must
 remain unknown. Machine, runtime, network and analyzer-version differences can
 change timing and diagnostics. External dependencies are intentionally not installed.
+
+## Larger mixed repositories: Hindsight, OpenShell and OpenRig
+
+The user selected these three projects for a real adoption check on October 1–2,
+2026. Each was acquired directly from its GitHub URL at an immutable commit,
+using the full profile and the same trusted native toolchain. Target code and
+dependencies remained inert. These are engineering fixtures, not a leaderboard.
+
+| Repository | Immutable source | First integrated URL receipt | Located review signal |
+| --- | --- | --- | --- |
+| [Hindsight](https://github.com/vectorize-io/hindsight) | `0be6c02b2aafc2b6bdb188ef1842ac507e0cfa2b` | 423.50 s; exit 1; provisional 20/F; 7/16 required complete | `extract_chinese_period`, complexity 315; frontend functions reach 106 |
+| [OpenShell](https://github.com/NVIDIA/OpenShell) | `76cfd0e31d5e1633db7ccd86ad9023ef7a2461b2` | 149.14 s; exit 1; provisional 20/F; 9/16 required complete | `handle_forward_proxy`, complexity 142; an e2e cleanup function reaches 64 |
+| [OpenRig](https://github.com/mvschwarz/openrig) | `71506f6ed980371342fd99372f32247483d247cc` | 364.54 s; exit 1; provisional 20/F; 10/16 required complete | TUI render code path, complexity 251; `compose_up`, complexity 68 |
+
+Those first integrated receipts used development commit `ed2d563` (package
+version 1.0.2, policy/schema 1.1.0). They exposed additional native duplication
+and history problems; their coverage and timings are baseline receipts, not
+claims about the final released checker. All three had real functions above
+the configured complexity blocker of 50, so their observed scores were capped
+at 20. Their strict complete scores remained unknown. A complexity signal
+identifies review work; it does not establish project correctness, inactivity,
+or whether the entire project should be abandoned.
+
+The original v1.0.1 Hindsight URL acquisition refused its 30 MB generator JAR.
+The repaired classifier declares recognized binary assets outside text scope
+and continues source analysis, without expanding archives. A real NUL-containing
+TSX file remains an explicit possible-source gap. Safe symlinks and unavailable
+external type dependencies also remain explicit limitations. No target path was
+manually removed to make a URL scan pass.
+
+### Defects fixed for 1.0.2
+
+- [#47](https://github.com/react-randy/diff-gremlin/issues/47): mixed source/assets
+  and local/ref/provider scope parity. Excluded vendor/build content no longer
+  consumes the source read budget; path, mode and symlink validation remains.
+- [#48](https://github.com/react-randy/diff-gremlin/issues/48): bounded native
+  batching for 11 MB Ruff and 4.8 MB Lizard output, valid negative unused NCSS
+  telemetry, larger Python source and native Shell escaped-newline coordinates.
+- [#49](https://github.com/react-randy/diff-gremlin/issues/49): located JS/TS
+  diagnostics no longer exhaust a 4 MiB aggregate source-reading budget. Captured
+  sizes, per-file limits, UTF-16 positions and corruption controls remain.
+- [#50](https://github.com/react-randy/diff-gremlin/issues/50): native overlapping
+  clone incidences and embedded CSS maps, retained valid clone findings when the
+  native detector emits corrupt second endpoints, independent Python dead-code
+  evidence, and bounded immutable history beyond 500 Python files.
+
+Native repaired clone probes covered Hindsight 542/572 selected production
+JS/TS files, OpenShell 17/19 and OpenRig 1,181/1,216. File/token windows remain
+visible. Hindsight and OpenRig additionally exposed invalid native endpoints;
+verified findings were retained without scoring corrupt evidence. Hindsight's
+973-file independent Python complexity/dead-code run completed in 5.79 seconds;
+its expensive clone search exceeded 180 seconds in diagnosis. A full scan
+retains independently verified dead-code facts within one configured deadline.
+A separate history probe produced ten captured revision samples rather than
+failing at the former 500-file cap. These are individual adapter controls, not
+whole-command timing claims.
+
+Reproduce the released checker with any URL/pin pair above:
+
+```sh
+docker run --rm ghcr.io/react-randy/diff-gremlin:1.0.2 check \
+  https://github.com/vectorize-io/hindsight \
+  --ref 0be6c02b2aafc2b6bdb188ef1842ac507e0cfa2b --profile full --format json
+```
+
+Use `--profile quick` for the first pass. A missing or rejected measurement does
+not become a clean result; the provisional observed score includes only valid,
+complete contributing stages and shows its category weight and required-stage
+coverage. Clone incidence is not a unique-line percentage.
