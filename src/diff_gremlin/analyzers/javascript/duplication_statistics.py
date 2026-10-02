@@ -46,6 +46,16 @@ def _ratio(total: int, duplicated: int) -> float:
     return math.floor(10000.0 * duplicated / total + 0.5) / 100 if total else 0.0
 
 
+def _validate_ratio(row: dict, units: str, duplicated: str, key: str) -> None:
+    """An empty native denominator cannot contain positive clone incidences."""
+    if row[units] == 0 and row[duplicated] > 0:
+        raise ValueError("native clone incidence has a zero denominator")
+    actual = percentage(row.get(key))
+    expected = _ratio(row[units], row[duplicated])
+    if not math.isclose(actual, expected, rel_tol=0, abs_tol=1e-9):
+        raise ValueError("native duplication ratio disagrees with counters")
+
+
 def statistic_row(value: object) -> dict:
     """Reject unsafe counters and percentages that disagree with native arithmetic."""
     if not isinstance(value, dict):
@@ -59,10 +69,7 @@ def statistic_row(value: object) -> dict:
         ("lines", "duplicatedLines", "percentage"),
         ("tokens", "duplicatedTokens", "percentageTokens"),
     ):
-        actual = percentage(value.get(key))
-        expected = _ratio(value[units], value[duplicated])
-        if not math.isclose(actual, expected, rel_tol=0, abs_tol=1e-9):
-            raise ValueError("native duplication ratio disagrees with counters")
+        _validate_ratio(value, units, duplicated, key)
     return value
 
 
@@ -86,10 +93,10 @@ def _clone_sources(row: dict) -> tuple[dict, tuple[str, str]]:
     """Require both source identities before accumulating clone incidences."""
     first, second = row.get("firstFile"), row.get("secondFile")
     if not isinstance(first, dict) or not isinstance(second, dict):
-        raise ValueError("missing native clone locations")
+        raise TypeError("missing native clone locations")
     first_name, second_name = first.get("name"), second.get("name")
     if not isinstance(first_name, str) or not isinstance(second_name, str):
-        raise ValueError("missing native clone source identity")
+        raise TypeError("missing native clone source identity")
     return first, (first_name, second_name)
 
 
@@ -100,7 +107,7 @@ def _clone_units(first: dict) -> Counter:
         raise ValueError("invalid native clone line extent")
     start_point, end_point = first.get("startLoc"), first.get("endLoc")
     if not isinstance(start_point, dict) or not isinstance(end_point, dict):
-        raise ValueError("missing native clone endpoints")
+        raise TypeError("missing native clone endpoints")
     begin, finish = start_point.get("position"), end_point.get("position")
     if not natural(begin) or not natural(finish) or finish < begin:
         raise ValueError("invalid native clone token extent")
@@ -112,7 +119,7 @@ def _clone_units(first: dict) -> Counter:
 def _clone_incidence(row: object) -> tuple[str, tuple[str, str], Counter]:
     """Derive the native once-per-clone contribution from the first location."""
     if not isinstance(row, dict) or not isinstance(row.get("format"), str):
-        raise ValueError("invalid clone format")
+        raise TypeError("invalid clone format")
     first, names = _clone_sources(row)
     return row["format"], names, _clone_units(first)
 

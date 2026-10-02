@@ -35,6 +35,10 @@ _MAX_REPORT_BYTES = 4 * 1024 * 1024
 _MAX_SOURCE_BYTES = 100 * 1024
 
 
+class CloneCoordinateError(ValueError):
+    """A well-formed native clone location disagrees with captured source."""
+
+
 def _inventory(
     value: object, expected: set[str], *, complete: bool = False
 ) -> set[str]:
@@ -87,14 +91,14 @@ def _clone_schema(location: object, paths: dict[str, str]) -> dict:
 def _clone_range(location: dict, lengths: tuple[int, ...]) -> None:
     start, end = location["start"], location["end"]
     if not 1 <= start <= end <= len(lengths):
-        raise ValueError("clone range outside source lines")
+        raise CloneCoordinateError("clone range outside source lines")
     first, last = location["startLoc"], location["endLoc"]
     if any(point["column"] > lengths[point["line"] - 1] + 1 for point in (first, last)):
-        raise ValueError("clone column outside source line")
+        raise CloneCoordinateError("clone column outside source line")
     if (start, first["column"]) > (end, last["column"]):
-        raise ValueError("reversed clone endpoints")
+        raise CloneCoordinateError("reversed clone endpoints")
     if first["position"] > last["position"]:
-        raise ValueError("reversed native clone positions")
+        raise CloneCoordinateError("reversed native clone positions")
 
 
 def _clone_location(
@@ -113,8 +117,8 @@ def _clone_location(
     )
 
 
-def _clones(rows: list, paths: dict[str, str]) -> tuple[list[Finding], int]:
-    findings, rejected = [], 0
+def _clones(rows: list, paths: dict[str, str]) -> tuple[list[Finding], dict[str, int]]:
+    findings, rejected = [], {}
     lengths = {name: _source_lengths(name) for name in paths} if rows else {}
     for row in rows:
         if not isinstance(row, dict) or not positive(row.get("lines")):
@@ -128,8 +132,9 @@ def _clones(rows: list, paths: dict[str, str]) -> tuple[list[Finding], int]:
         first_finding = _clone_location(first, paths, lengths)
         try:
             second_finding = _clone_location(second, paths, lengths)
-        except ValueError:
-            rejected += 1
+        except CloneCoordinateError as error:
+            cause = str(error)
+            rejected[cause] = rejected.get(cause, 0) + 1
             continue
         findings.extend((first_finding, second_finding))
     return findings, rejected
@@ -192,8 +197,10 @@ def _report(report_path: Path, paths: dict[str, str], invocation: str):
         metrics["native_duplication_incidence_percent"] = metrics.pop(
             "duplication_percent"
         )
-        metrics["verified_clone_groups"] = len(rows) - rejected
-        metrics["rejected_clone_groups"] = rejected
+        count = sum(rejected.values())
+        metrics["verified_clone_groups"] = len(rows) - count
+        metrics["rejected_clone_groups"] = count
+        metrics["rejected_clone_reasons"] = dict(sorted(rejected.items()))
     return metrics, findings, len(analyzed)
 
 
@@ -270,7 +277,9 @@ def _coverage_reason(metrics: dict, count: int, eligible: int) -> str:
     if rejected := metrics.get("rejected_clone_groups"):
         reasons.append(
             f"jscpd upstream native coordinate defect rejected {rejected} clone groups; "
-            "verified clone findings remain, but native incidence telemetry supplies no duplication score"
+            + ", ".join(metrics["rejected_clone_reasons"])
+            + "; "
+            + "verified clone findings remain, but native incidence telemetry supplies no duplication score"
         )
     return "; ".join(reasons)
 

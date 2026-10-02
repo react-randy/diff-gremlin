@@ -73,6 +73,13 @@ def test_native_clone_rejection_preserves_safe_cause(tmp_path, mutation, cause):
     if mutation == "none":
         assert result.status == "ok" and result.analyzed_files == 2
         assert result.metrics["clone_groups"] > 0 and result.findings
+    elif mutation == "range":
+        assert result.status == "limited" and result.analyzed_files == 2
+        assert result.eligible_files == 2 and result.findings == []
+        assert result.metrics["rejected_clone_groups"] == 1
+        assert result.metrics["rejected_clone_reasons"] == {cause: 1}
+        assert "duplication_percent" not in result.metrics
+        assert cause in result.reason
     else:
         assert result.status == "failed" and result.analyzed_files == 0
         assert result.eligible_files == 2 and result.findings == []

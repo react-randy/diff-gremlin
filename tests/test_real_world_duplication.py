@@ -127,6 +127,42 @@ def test_native_ratio_must_match_counters(native_report, field):
 
 
 @pytest.mark.parametrize(
+    "units,key", [("lines", "percentage"), ("tokens", "percentageTokens")]
+)
+def test_native_zero_denominator_cannot_erase_real_clone_incidence(context, units, key):
+    def mutate(data):
+        rows = [data["statistics"]["total"]]
+        for value in data["statistics"]["formats"].values():
+            rows.extend([value["total"], *value["sources"].values()])
+        for row in rows:
+            row[units] = row[key] = 0
+
+    ctx, captures = context([("a.ts", LONG), ("b.ts", LONG)], mutate)
+    result = analyze_js_duplication(ctx)
+    assert captures[0]["statistics"]["total"]["percentage"] == 50
+    assert result.status == "failed" and "zero denominator" in result.reason
+    assert not result.metrics and not result.findings
+    assert stage_score(result) is None
+
+
+def test_empty_native_statistic_row_remains_valid():
+    row = dict.fromkeys(
+        [
+            "sources",
+            "lines",
+            "tokens",
+            "clones",
+            "duplicatedLines",
+            "duplicatedTokens",
+            "percentage",
+            "percentageTokens",
+        ],
+        0,
+    )
+    assert statistic_row(row) == row
+
+
+@pytest.mark.parametrize(
     "field",
     ["clones", "duplicatedLines", "duplicatedTokens", "lines", "tokens", "sources"],
 )
