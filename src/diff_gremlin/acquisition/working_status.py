@@ -5,11 +5,7 @@ from pathlib import Path
 
 from diff_gremlin.acquisition.git import Git
 from diff_gremlin.acquisition.tree import TreeEntry
-from diff_gremlin.inventory import EXCLUDED_DIRECTORIES
-
-
-def in_scope(path: str) -> bool:
-    return not any(part in EXCLUDED_DIRECTORIES for part in Path(path).parts[:-1])
+from diff_gremlin.source_paths import in_scope
 
 
 def _blob_hash(content: bytes, length: int) -> str:

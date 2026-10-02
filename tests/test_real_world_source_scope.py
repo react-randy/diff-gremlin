@@ -368,3 +368,139 @@ def test_unreadable_working_source_has_visible_partial_manifest(
         assert selected.stage.status == "limited"
         assert any(row.relative_path == "main.py" for row in snapshot.scope_manifest)
         assert "controlled private context" not in repr(snapshot.scope_manifest)
+
+
+def excluded_repository(tmp_path, excluded):
+    root = tmp_path / "excluded-repository"
+    root.mkdir()
+    git(root, "init", "-b", "main")
+    git(root, "config", "user.name", "Fixture")
+    git(root, "config", "user.email", "fixture@example.test")
+    (root / "main.py").write_text("answer = 1\n")
+    content = root / excluded / "large.py"
+    content.parent.mkdir(parents=True)
+    content.write_text("ignored = 1\n" * 20)
+    git(root, "add", ".")
+    git(root, "commit", "-m", "excluded directory fixture")
+    return root, git(root, "rev-parse", "HEAD")
+
+
+@pytest.mark.parametrize(
+    "excluded", ["vendor", "build", "nested/vendor", "node_modules"]
+)
+def test_excluded_regular_contents_do_not_change_local_ref_or_review_scope(
+    tmp_path, monkeypatch, excluded
+):
+    root, commit = excluded_repository(tmp_path, excluded)
+    monkeypatch.setattr(objects, "MAX_FILE_BYTES", 64)
+    monkeypatch.setattr(working, "MAX_FILE_BYTES", 64)
+    monkeypatch.setattr(objects, "MAX_TREE_BYTES", 96)
+    monkeypatch.setattr(working, "MAX_TREE_BYTES", 96)
+    results = []
+    for ref in (None, commit):
+        with acquire_source(str(root), ref=ref) as snapshot:
+            selected = inventory.collect_inventory(
+                snapshot.root, snapshot.scope_manifest
+            )
+            results.append(
+                (
+                    selected.stage.status,
+                    tuple(f.relative_path for f in selected.files),
+                    snapshot.scope_manifest,
+                )
+            )
+            assert not snapshot.identity.dirty
+            assert selected.stage.metrics["omitted_possible_source_files"] == 0
+            assert selected.stage.metrics["binary_asset_files"] == 0
+    assert results == [("ok", ("main.py",), ())] * 2
+    review = ReviewTarget(
+        "github",
+        "https://github.com/team/repo/pull/1",
+        "team/repo",
+        1,
+        str(root),
+        str(root),
+        commit,
+        commit,
+    )
+    with acquire_comparison(str(root), commit, commit, review=review) as pair:
+        for snapshot in (pair.base, pair.head):
+            selected = inventory.collect_inventory(
+                snapshot.root, snapshot.scope_manifest
+            )
+            assert selected.stage.status == "ok"
+            assert tuple(f.relative_path for f in selected.files) == ("main.py",)
+            assert not snapshot.scope_manifest
+
+
+def test_excluded_regular_git_blobs_are_not_read(tmp_path, monkeypatch):
+    root, commit = excluded_repository(tmp_path, "build")
+    original = objects._blob_batches
+    captured = []
+
+    def inspected(client, repo, entries):
+        captured.extend(entry.path for entry in entries)
+        return original(client, repo, entries)
+
+    monkeypatch.setattr(objects, "_blob_batches", inspected)
+    with acquire_source(str(root), ref=commit) as snapshot:
+        assert (snapshot.root / "main.py").exists()
+    assert captured == ["main.py"]
+
+
+def test_inherited_out_of_scope_omissions_do_not_create_gaps(tmp_path):
+    (tmp_path / "main.py").write_text("answer = 1\n")
+    ignored = (
+        SourceScopeEntry("vendor/large.py", 9999, "possible-source", "byte limit"),
+        SourceScopeEntry("nested/build/archive.jar", 9999, "binary-asset", "archive"),
+    )
+    result = inventory.collect_inventory(tmp_path, ignored)
+    assert result.stage.status == "ok"
+    assert result.scope_manifest == ()
+    assert result.stage.metrics["scope_manifest"] == []
+    assert result.stage.metrics["omitted_possible_source_files"] == 0
+    retained = SourceScopeEntry("vendor.py", 9999, "possible-source", "byte limit")
+    result = inventory.collect_inventory(tmp_path, (*ignored, retained))
+    assert result.stage.status == "limited" and result.scope_manifest == (retained,)
+
+
+def test_excluded_symlink_target_is_validated_without_materialization(tmp_path):
+    root, _ = excluded_repository(tmp_path, "vendor")
+    (root / "vendor" / "safe").symlink_to("../main.py")
+    git(root, "add", ".")
+    git(root, "commit", "-m", "excluded inert link")
+    with acquire_source(str(root), ref="HEAD") as snapshot:
+        assert not (snapshot.root / "vendor").exists()
+        assert (
+            inventory.collect_inventory(
+                snapshot.root, snapshot.scope_manifest
+            ).stage.status
+            == "ok"
+        )
+    (root / "vendor" / "escape").symlink_to("../../outside")
+    git(root, "add", ".")
+    git(root, "commit", "-m", "excluded unsafe link")
+    with (
+        pytest.raises(RuntimeError, match="escapes"),
+        acquire_source(str(root), ref="HEAD"),
+    ):
+        pass
+
+
+@pytest.mark.parametrize(
+    ("mode", "kind", "path"),
+    [
+        ("100644", "blob", "vendor/../outside"),
+        ("160000", "commit", "build/submodule"),
+    ],
+)
+def test_tree_metadata_guards_apply_before_directory_exclusion(
+    tmp_path, mode, kind, path
+):
+    from diff_gremlin.acquisition.git import Git
+    from diff_gremlin.acquisition.tree import tree_entries
+
+    client = Git(10)
+    client.run = lambda *args, **kwargs: f"{mode} {kind} " + "a" * 40 + f" 1\t{path}\0"
+    with pytest.raises(RuntimeError):
+        tree_entries(client, tmp_path, "a" * 40)

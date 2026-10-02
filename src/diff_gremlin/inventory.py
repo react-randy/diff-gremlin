@@ -10,31 +10,13 @@ from diff_gremlin.domain.context import SourceFile
 from diff_gremlin.domain.findings import Finding
 from diff_gremlin.domain.sources import SourceScopeEntry
 from diff_gremlin.domain.stages import StageResult
+from diff_gremlin.source_paths import EXCLUDED_DIRECTORIES, in_scope
 from diff_gremlin.source_scope import classify_content
 
 MAX_FILES = 20000
 MAX_FILE_BYTES = 8 * 1024 * 1024
 MAX_TREE_BYTES = 256 * 1024 * 1024
 MAX_ENTRIES = 100000
-EXCLUDED_DIRECTORIES = {
-    ".git": "Git metadata is inspected separately",
-    "node_modules": "installed dependencies",
-    "vendor": "vendored dependencies",
-    ".venv": "Python environment",
-    "venv": "Python environment",
-    "__pycache__": "Python bytecode",
-    ".mypy_cache": "type-check cache",
-    ".pytest_cache": "test cache",
-    ".ruff_cache": "lint cache",
-    ".pyscn": "analyzer artifacts",
-    ".wily": "history cache",
-    "target": "Rust/build artifacts",
-    "build": "build artifacts",
-    "dist": "distribution artifacts",
-    ".next": "framework build artifacts",
-    ".gradle": "Gradle cache",
-    ".idea": "editor metadata",
-}
 LANGUAGES = {
     ".py": "python",
     ".pyi": "python",
@@ -250,6 +232,7 @@ def _inventory_state(
     root: Path, scope_manifest: tuple[SourceScopeEntry, ...]
 ) -> InventoryState:
     """Merge captured omissions into the initial inventory coverage state."""
+    scope_manifest = tuple(row for row in scope_manifest if in_scope(row.relative_path))
     state = InventoryState(
         root,
         scope_manifest=list(scope_manifest),

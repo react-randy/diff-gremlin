@@ -11,21 +11,18 @@ from diff_gremlin.acquisition.scope import content_scope
 from diff_gremlin.acquisition.tree import TreeEntry, tree_entries
 from diff_gremlin.domain.sources import SourceScopeEntry
 from diff_gremlin.inventory import MAX_FILE_BYTES, MAX_TREE_BYTES
+from diff_gremlin.source_paths import in_scope
 
 
-def extract_tree(
-    git: Git,
-    repo: Path,
-    commit: str,
-    destination: Path,
-    *,
-    scope_manifest: list[SourceScopeEntry] | None = None,
+def _selected_entries(
+    entries: tuple[TreeEntry, ...], scope_manifest: list[SourceScopeEntry] | None
 ) -> tuple[TreeEntry, ...]:
-    destination.mkdir()
-    entries = tree_entries(git, repo, commit)
+    """Select bounded in-scope content and retain every symlink for validation."""
     selected = []
     read_bytes = 0
     for entry in entries:
+        if entry.mode != "120000" and not in_scope(entry.path):
+            continue
         if read_bytes + entry.size > MAX_TREE_BYTES:
             if scope_manifest is None or entry.mode == "120000":
                 raise RuntimeError("Source tree exceeds bounded byte limits")
@@ -40,10 +37,27 @@ def extract_tree(
         else:
             selected.append(entry)
             read_bytes += entry.size
-    for entry, content in _blob_batches(git, repo, tuple(selected)):
+    return tuple(selected)
+
+
+def extract_tree(
+    git: Git,
+    repo: Path,
+    commit: str,
+    destination: Path,
+    *,
+    scope_manifest: list[SourceScopeEntry] | None = None,
+) -> tuple[TreeEntry, ...]:
+    destination.mkdir()
+    entries = tree_entries(git, repo, commit)
+    for entry, content in _blob_batches(
+        git, repo, _selected_entries(entries, scope_manifest)
+    ):
         if entry.mode == "120000":
             safe_link(entry.path, content.decode("utf-8", "surrogateescape"))
-        elif scope_manifest is not None:
+        if not in_scope(entry.path):
+            continue
+        if entry.mode != "120000" and scope_manifest is not None:
             omission = content_scope(entry.path, content, entry.size, MAX_FILE_BYTES)
             if omission is not None:
                 scope_manifest.append(omission)
