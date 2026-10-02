@@ -1,12 +1,17 @@
 """Read only fresh jscpd evidence from an invocation-owned source view."""
 
 import json
-import math
 import tempfile
 from functools import partial
 from pathlib import Path
 from uuid import uuid4
 
+from diff_gremlin.analyzers.javascript.duplication_statistics import (
+    format_catalog,
+    percentage,
+    source_ids,
+    statistic_row,
+)
 from diff_gremlin.analyzers.javascript.installed import (
     installed_package,
     package_version,
@@ -30,13 +35,8 @@ _MAX_REPORT_BYTES = 4 * 1024 * 1024
 _MAX_SOURCE_BYTES = 100 * 1024
 
 
-def _percentage(total: dict) -> float:
-    value = total.get("percentage")
-    if not isinstance(value, (int, float)) or isinstance(value, bool):
-        raise TypeError("duplication percentage must be numeric")
-    if not math.isfinite(value) or not 0 <= value <= 100:
-        raise ValueError("invalid duplication percentage")
-    return float(value)
+class CloneCoordinateError(ValueError):
+    """A well-formed native clone location disagrees with captured source."""
 
 
 def _inventory(
@@ -52,52 +52,6 @@ def _inventory(
     return observed
 
 
-def _statistic_row(value: object) -> dict:
-    if not isinstance(value, dict):
-        raise TypeError("missing native source statistics")
-    counters = (
-        "sources",
-        "clones",
-        "lines",
-        "tokens",
-        "duplicatedLines",
-        "duplicatedTokens",
-    )
-    if not all(natural(value.get(key)) for key in counters):
-        raise ValueError("invalid native source statistics")
-    _percentage(value)
-    _percentage({"percentage": value.get("percentageTokens")})
-    return value
-
-
-def _format_sources(value: object, expected: set[str]) -> set[str]:
-    if not isinstance(value, dict) or not isinstance(value.get("sources"), dict):
-        raise TypeError("missing per-format source identities")
-    sources, total = value["sources"], _statistic_row(value.get("total"))
-    if total["sources"] != len(sources) or not sources.keys() <= expected:
-        raise ValueError("per-format source count or identities differ")
-    for row in sources.values():
-        if _statistic_row(row)["sources"] != 1:
-            raise ValueError("invalid per-file source statistic")
-    return set(sources)
-
-
-def _source_ids(statistics: dict, expected: set[str]) -> set[str]:
-    formats, total = statistics.get("formats"), statistics["total"]
-    if not isinstance(formats, dict) or not natural(total.get("sources")):
-        raise TypeError("missing native source-map statistics")
-    identities, maps = set(), 0
-    for name, value in formats.items():
-        if name not in {"javascript", "typescript", "jsx", "tsx"}:
-            raise ValueError("unexpected duplication source format")
-        sources = _format_sources(value, expected)
-        identities.update(sources)
-        maps += len(sources)
-    if maps != total["sources"]:
-        raise ValueError("native source-map count differs from source identities")
-    return identities
-
-
 def _source_lengths(name: str) -> tuple[int, ...]:
     with Path(name).open("rb") as stream:
         contents = stream.read(_MAX_SOURCE_BYTES + 1)
@@ -108,7 +62,7 @@ def _source_lengths(name: str) -> tuple[int, ...]:
     return tuple(len(line.encode("utf-16-le")) // 2 for line in lines)
 
 
-def _clone_point(point: object, line: int, lengths: tuple[int, ...]) -> dict:
+def _clone_point(point: object, line: int) -> dict:
     if (
         not isinstance(point, dict)
         or not positive(point.get("line"))
@@ -117,35 +71,41 @@ def _clone_point(point: object, line: int, lengths: tuple[int, ...]) -> dict:
         raise ValueError("clone endpoint differs from reported line")
     if not positive(point.get("column")) or not natural(point.get("position")):
         raise ValueError("invalid clone endpoint")
-    if point["column"] > lengths[line - 1] + 1:
-        raise ValueError("clone column outside source line")
     return point
 
 
-def _clone_range(location: dict, lengths: tuple[int, ...]) -> None:
+def _clone_schema(location: object, paths: dict[str, str]) -> dict:
+    """Malformed or foreign records never become recognized native defects."""
+    if not isinstance(location, dict) or not isinstance(location.get("name"), str):
+        raise TypeError("invalid clone location")
+    if location["name"] not in paths:
+        raise ValueError("clone location outside analyzed files")
     start, end = location.get("start"), location.get("end")
-    if (
-        not positive(start)
-        or not positive(end)
-        or not 1 <= start <= end <= len(lengths)
-    ):
-        raise ValueError("clone range outside source lines")
-    first = _clone_point(location.get("startLoc"), start, lengths)
-    last = _clone_point(location.get("endLoc"), end, lengths)
+    if not positive(start) or not positive(end):
+        raise ValueError("invalid clone line extent")
+    _clone_point(location.get("startLoc"), start)
+    _clone_point(location.get("endLoc"), end)
+    return location
+
+
+def _clone_range(location: dict, lengths: tuple[int, ...]) -> None:
+    start, end = location["start"], location["end"]
+    if not 1 <= start <= end <= len(lengths):
+        raise CloneCoordinateError("clone range outside source lines")
+    first, last = location["startLoc"], location["endLoc"]
+    if any(point["column"] > lengths[point["line"] - 1] + 1 for point in (first, last)):
+        raise CloneCoordinateError("clone column outside source line")
     if (start, first["column"]) > (end, last["column"]):
-        raise ValueError("reversed clone endpoints")
+        raise CloneCoordinateError("reversed clone endpoints")
     if first["position"] > last["position"]:
-        raise ValueError("reversed native clone positions")
+        raise CloneCoordinateError("reversed native clone positions")
 
 
 def _clone_location(
     location: object, paths: dict[str, str], lengths: dict[str, tuple[int, ...]]
 ) -> Finding:
-    if not isinstance(location, dict) or not isinstance(location.get("name"), str):
-        raise TypeError("invalid clone location")
+    location = _clone_schema(location, paths)
     name = location["name"]
-    if name not in paths:
-        raise ValueError("clone location outside analyzed files")
     _clone_range(location, lengths[name])
     return Finding(
         "duplication.clone",
@@ -157,20 +117,27 @@ def _clone_location(
     )
 
 
-def _clones(rows: list, paths: dict[str, str]) -> list[Finding]:
-    findings = []
+def _clones(rows: list, paths: dict[str, str]) -> tuple[list[Finding], dict[str, int]]:
+    findings, rejected = [], {}
     lengths = {name: _source_lengths(name) for name in paths} if rows else {}
     for row in rows:
         if not isinstance(row, dict) or not positive(row.get("lines")):
             raise ValueError("invalid clone record")
-        findings.extend(
-            _clone_location(row.get(side), paths, lengths)
-            for side in ("firstFile", "secondFile")
-        )
-        first = row["firstFile"]
+        first = _clone_schema(row.get("firstFile"), paths)
+        second = _clone_schema(row.get("secondFile"), paths)
         if row["lines"] != first["end"] - first["start"] + 1:
             raise ValueError("clone extent differs from first source range")
-    return findings
+        # RabinKarp.enlargeClone may replace B.end using a different hash-hit source.
+        # A remains the scanned source: only well-formed B coordinate defects degrade.
+        first_finding = _clone_location(first, paths, lengths)
+        try:
+            second_finding = _clone_location(second, paths, lengths)
+        except CloneCoordinateError as error:
+            cause = str(error)
+            rejected[cause] = rejected.get(cause, 0) + 1
+            continue
+        findings.extend((first_finding, second_finding))
+    return findings, rejected
 
 
 def _report_data(report_path: Path, expected: set[str], invocation: str):
@@ -188,26 +155,34 @@ def _report_data(report_path: Path, expected: set[str], invocation: str):
     _inventory(data.get("requested_files"), expected, complete=True)
     detector = _inventory(data.get("detector_files"), expected)
     total, rows = (
-        _statistic_row(data["statistics"].get("total")),
+        statistic_row(data["statistics"].get("total")),
         data.get("duplicates"),
     )
     if not isinstance(rows, list):
         raise TypeError("missing clone list")
     if total["clones"] != len(rows):
         raise ValueError("clone count differs from records")
-    return data["statistics"], rows, detector
+    return (
+        data["statistics"],
+        rows,
+        detector,
+        format_catalog(data.get("tokenizer_formats")),
+    )
 
 
 def _report(report_path: Path, paths: dict[str, str], invocation: str):
-    statistics, rows, detector = _report_data(report_path, set(paths), invocation)
-    identities = _source_ids(statistics, detector)
+    statistics, rows, detector, catalog = _report_data(
+        report_path, set(paths), invocation
+    )
+    identities = source_ids(statistics, detector, rows, catalog)
     total = statistics["total"]
-    percentage = _percentage(total)
-    if not identities and (percentage != 0 or rows):
+    ratio = percentage(total.get("percentage"))
+    if not identities and (ratio != 0 or rows):
         raise ValueError("duplication observations without native source identities")
     analyzed = {path: paths[path] for path in identities}
     metrics = {
-        "duplication_percent": percentage,
+        "duplication_percent": ratio,
+        "measure": "jscpd-native-clone-incidence-v1",
         "clone_groups": len(rows),
         "analyzed_paths": sorted(analyzed.values()),
         "detector_input_files": len(detector),
@@ -217,7 +192,16 @@ def _report(report_path: Path, paths: dict[str, str], invocation: str):
         "maximum_file_lines": _LIMITS["maxLines"],
         "maximum_file_size": _LIMITS["maxSize"],
     }
-    return metrics, _clones(rows, analyzed), len(analyzed)
+    findings, rejected = _clones(rows, analyzed)
+    if rejected:
+        metrics["native_duplication_incidence_percent"] = metrics.pop(
+            "duplication_percent"
+        )
+        count = sum(rejected.values())
+        metrics["verified_clone_groups"] = len(rows) - count
+        metrics["rejected_clone_groups"] = count
+        metrics["rejected_clone_reasons"] = dict(sorted(rejected.items()))
+    return metrics, findings, len(analyzed)
 
 
 def _copy_sources(files, source: Path) -> None:
@@ -281,6 +265,25 @@ def _environment(ctx):
     )
 
 
+def _coverage_reason(metrics: dict, count: int, eligible: int) -> str:
+    """Explain both native input omissions and rejected native clone coordinates."""
+    reasons = []
+    if count < eligible:
+        reasons.append(
+            "jscpd native source identities cover fewer files than the selected inventory; "
+            "native filters retain files with 5 to 1000 lines up to 100kb; clone windows require "
+            "at least 5 lines and 50 tokens; omitted files do not supply a duplication score"
+        )
+    if rejected := metrics.get("rejected_clone_groups"):
+        reasons.append(
+            f"jscpd upstream native coordinate defect rejected {rejected} clone groups; "
+            + ", ".join(metrics["rejected_clone_reasons"])
+            + "; "
+            + "verified clone findings remain, but native incidence telemetry supplies no duplication score"
+        )
+    return "; ".join(reasons)
+
+
 def analyze_js_duplication(ctx: ScanContext) -> StageResult:
     files = tuple(
         file
@@ -317,16 +320,14 @@ def analyze_js_duplication(ctx: ScanContext) -> StageResult:
         _ID,
         _LABEL,
         "duplication",
-        "ok" if count == len(files) else "limited",
+        "ok"
+        if count == len(files) and not metrics.get("rejected_clone_groups")
+        else "limited",
         "jscpd",
         package_version(package),
         metrics=metrics,
         findings=findings,
-        reason=""
-        if count == len(files)
-        else "jscpd native source identities cover fewer files than the selected inventory; "
-        "native filters retain files with 5 to 1000 lines up to 100kb; clone windows require "
-        "at least 5 lines and 50 tokens; omitted files do not supply a duplication score",
+        reason=_coverage_reason(metrics, count, len(files)),
         eligible_files=len(files),
         analyzed_files=count,
         duration_seconds=result.duration_seconds,

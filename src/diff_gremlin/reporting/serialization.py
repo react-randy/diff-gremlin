@@ -9,7 +9,7 @@ from diff_gremlin.policy.metrics import stage_score
 from diff_gremlin.policy.thresholds import POLICY_VERSION
 from diff_gremlin.reporting.advice import next_actions
 
-SCHEMA_VERSION = "1.0.0"
+SCHEMA_VERSION = "1.1.0"
 
 
 def stage_document(stage):

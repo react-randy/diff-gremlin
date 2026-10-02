@@ -16,7 +16,7 @@ def _file_counts(
         path = locations.relative(item.attrib.get("name"))
         if path in seen:
             raise ValueError("duplicate Lizard file observation")
-        seen[path] = _values(item, 4)[3]
+        seen[path] = _values(item, 4, signed_ncss=True)[3]
     if set(seen) != {file.relative_path for file in files}:
         raise ValueError("Lizard did not cover the eligible file inventory")
     return seen
@@ -50,9 +50,13 @@ def _python_declarations(
     ]
 
 
-def _values(item: ET.Element, length: int) -> list[int]:
+def _values(item: ET.Element, length: int, *, signed_ncss: bool = False) -> list[int]:
     values = [int(value.text or "") for value in item.findall("value")]
-    if len(values) != length or any(value < 0 for value in values):
+    if len(values) != length or any(
+        value < 0
+        for index, value in enumerate(values)
+        if not (signed_ncss and index == 1)
+    ):
         raise ValueError("invalid Lizard metric row")
     return values
 
@@ -64,7 +68,9 @@ def _functions(locations: SourceLocations, measure: ET.Element) -> list[dict]:
         path, line_text = location.rsplit(":", 1)
         path = locations.relative(path)
         line = int(line_text)
-        cc = _values(item, 3)[2]
+        # Lizard 1.24 subtracts multiline string NCSS twice in some valid Python
+        # bodies. NCSS is unused telemetry; CCN and identity remain strict.
+        cc = _values(item, 3, signed_ncss=True)[2]
         if line < 1 or cc < 1 or not name.endswith("(...)"):
             raise ValueError("invalid Lizard function location")
         name = name[:-5]

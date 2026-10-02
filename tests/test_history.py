@@ -37,7 +37,7 @@ class HistoryRunner:
         elif "log" in command:
             output = f"{_SHA} 1234\n"
         elif "ls-tree" in command:
-            output = f"100644 blob {_BLOB}\ta.py\x00"
+            output = f"100644 blob {_BLOB} {len(self.content.encode())}\ta.py\x00"
         elif "cat-file" in command:
             output = f"{_BLOB} blob {len(self.content.encode())}\n{self.content}\n"
         return RunResult(tuple(command), code, output)
@@ -242,3 +242,37 @@ def test_real_runner_preserves_credential_shaped_source_blob(tmp_path):
     result = analyze_history(ctx, revision=final)
     assert result.status == "ok" and result.metrics["commit_count"] == 2
     assert [row["max_cc"] for row in result.metrics["rows"]] == [1, 1]
+
+
+def test_native_history_handles_many_files_and_bounded_blob_batches(tmp_path):
+    """An ordinary source inventory may exceed the former 500-file cap."""
+    from diff_gremlin.process import run
+
+    ctx = make_context(tmp_path, run)
+    git(ctx.root, "init", "--initial-branch=main")
+    for index in range(501):
+        (ctx.root / f"small_{index}.py").write_text("def value():\n    return 1\n")
+    # Exercise a single ordinary source above the old 1 MiB blob limit too.
+    (ctx.root / "large.py").write_text("# ordinary documentation\n" * 45000)
+    git(ctx.root, "add", ".")
+    git(ctx.root, "commit", "-m", "ordinary multi-file source")
+    result = analyze_history(ctx)
+    assert result.status == "limited" and "One commit" in result.reason
+    assert result.metrics["rows"][0]["files"] == 503
+    assert result.metrics["rows"][0]["max_cc"] == 1
+
+
+def test_history_resource_bound_is_named_without_a_clean_score(tmp_path, monkeypatch):
+    from diff_gremlin.analyzers import history_objects
+
+    monkeypatch.setattr(history_objects, "MAX_FILE_BYTES", 8)
+    stage = analyze_history(make_context(tmp_path, HistoryRunner()))
+    assert stage.status == "limited" and "file budget" in stage.reason
+    assert not stage.metrics
+
+
+def test_history_blob_size_must_match_captured_metadata():
+    from diff_gremlin.analyzers.history_objects import HistoryEntry, blob_contents
+
+    with pytest.raises(ValueError, match="captured size"):
+        blob_contents(f"{_BLOB} blob 2\nx\n", [HistoryEntry(_BLOB, "a.py", 1)])

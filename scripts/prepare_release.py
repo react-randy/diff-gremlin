@@ -9,7 +9,7 @@ from email.parser import BytesParser
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "1.0.1"
+VERSION = "1.0.2"
 ASSETS = (
     "diff_gremlin/analyzers/java/assets/StructureProbe.java",
     "diff_gremlin/analyzers/javascript/assets/lint.cjs",

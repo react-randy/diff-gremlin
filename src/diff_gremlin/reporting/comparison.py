@@ -7,6 +7,7 @@ from diff_gremlin.reporting import comparison_summary as summary
 from diff_gremlin.reporting import markdown, text
 from diff_gremlin.reporting.escaping import markdown as escape
 from diff_gremlin.reporting.escaping import plain
+from diff_gremlin.reporting.summary import FINDING_LIMIT, truncation_note
 
 
 def table(headers: tuple[str, ...], rows: list[tuple]) -> list[str]:
@@ -28,8 +29,10 @@ def finding_lines(document: dict, *, rich: bool) -> list[str]:
         rows = summary.finding_rows(document, key)
         lines.extend(
             f"- {safe(severity)} · {safe(location)} · {safe(stage)} · {safe(rule)} — {safe(message)}"
-            for severity, stage, location, rule, message in rows
+            for severity, stage, location, rule, message in rows[:FINDING_LIMIT]
         )
+        if note := truncation_note(len(rows), FINDING_LIMIT, label.lower()):
+            lines.append(note)
         if not rows:
             lines.append("None observed. Read the coverage and resolution notes.")
         lines.append("")

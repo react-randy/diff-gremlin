@@ -8,9 +8,10 @@ Concrete structs omit Type; interface children require it.
 import json
 from bisect import bisect_right
 from pathlib import Path
+from typing import TypeGuard
 
-MAX_JSON_BYTES = 8 * 1024 * 1024
-MAX_NODES = 20_000
+MAX_JSON_BYTES = 64 * 1024 * 1024
+MAX_NODES = 500_000
 MAX_DEPTH = 128
 _SCHEMA = json.loads((Path(__file__).parent / "assets" / "schema.json").read_text())
 _OPERATORS = json.loads(
@@ -148,7 +149,7 @@ class Validator:
             "End",
         }:
             raise ValueError("missing or unknown AST fields")
-        self.fields(value, fields, depth)
+        self.fields(value, fields, depth, kind)
         self.required_shape(value, kind)
         value["_kind"] = kind
 
@@ -185,13 +186,87 @@ class Validator:
             if not self.source[start:].startswith(b"else"):
                 raise ValueError("conditional missing condition")
 
-    def fields(self, value: dict, fields: dict, depth: int) -> None:
+    def comment_end(self, node: dict, value: dict) -> bool:
+        """Go Comment.End adds Text bytes without updating line/column."""
+        text = node.get("Text")
+        start = node.get("Pos")
+        if not isinstance(text, str) or not isinstance(start, dict):
+            return False
+        self.position(start)
+        data = text.encode("utf-8")
+        offset = start["Offset"]
+        return (
+            data.endswith(b"\\\n")
+            and self.source[offset : offset + 1] == b"#"
+            and self.source[offset + 1 : value["Offset"]] == data
+            and value
+            == {
+                "Offset": offset + 1 + len(data),
+                "Line": start["Line"],
+                "Col": start["Col"] + 1 + len(data),
+            }
+        )
+
+    def literal_end(self, node: dict, value: dict) -> bool:
+        """Pinned heredoc lexer counts an escaped newline's slash only in Offset."""
+        text = node.get("Value")
+        start = node.get("ValuePos")
+        if (
+            not isinstance(text, str)
+            or not isinstance(start, dict)
+            or node.get("End") != node.get("ValueEnd")
+            or node.get("Pos") != start
+        ):
+            return False
+        self.position(start)
+        offset = value["Offset"]
+        line = bisect_right(self.starts, offset)
+        raw = self.source[start["Offset"] : offset]
+        return (
+            raw.endswith(b"\\")
+            and self.source[offset : offset + 1] == b"\n"
+            and raw[:-1].replace(b"\\\n", b"") == text.encode("utf-8")
+            and (value["Line"], value["Col"]) == (line, offset - self.starts[line - 1])
+        )
+
+    def bounded_position(self, value: object) -> TypeGuard[dict]:
+        """Check position shape before considering native coordinate exceptions."""
+        return (
+            isinstance(value, dict)
+            and set(value) == {"Offset", "Line", "Col"}
+            and all(type(item) is int for item in value.values())
+            and 0 <= value["Offset"] <= self.size
+        )
+
+    def derived_end(self, node: dict, kind: str, key: str, value: dict) -> bool:
+        """Route only the two pinned node/field exceptions to source verification."""
+        if kind == "Comment" and key == "End":
+            return self.comment_end(node, value)
+        if kind == "Lit" and key in {"End", "ValueEnd"}:
+            return self.literal_end(node, value)
+        return False
+
+    def node_position(self, node: dict, kind: str, key: str, value: object) -> None:
+        """Validate canonical positions or exact source-backed native derived ends."""
+        try:
+            self.position(value)
+            return
+        except ValueError:
+            if not self.bounded_position(value):
+                raise
+        if self.derived_end(node, kind, key, value):
+            return
+        raise ValueError("position disagrees with source")
+
+    def fields(self, value: dict, fields: dict, depth: int, kind: str) -> None:
         """Check every present field using the pinned descriptor table."""
         for key, item in value.items():
             if key != "Type":
-                self.value(
-                    item, "Pos" if key in {"Pos", "End"} else fields[key], depth + 1
-                )
+                expected = "Pos" if key in {"Pos", "End"} else fields[key]
+                if expected == "Pos":
+                    self.node_position(value, kind, key, item)
+                else:
+                    self.value(item, expected, depth + 1)
         if "Pos" in value and value["Pos"]["Offset"] > value["End"]["Offset"]:
             raise ValueError("reversed AST span")
 

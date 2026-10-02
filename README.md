@@ -11,10 +11,10 @@ you evidence. No model or API key required. It cannot guess who wrote your code.
 
 ## Install
 
-Install the pinned v1.0.1 release:
+Install the pinned v1.0.2 release:
 
 ```sh
-curl -fsSL https://github.com/react-randy/diff-gremlin/releases/download/v1.0.1/install.sh | sh
+curl -fsSL https://github.com/react-randy/diff-gremlin/releases/download/v1.0.2/install.sh | sh
 diff-gremlin doctor
 ```
 
@@ -26,7 +26,7 @@ manual installation, and uninstall](docs/installation.md).
 **Full toolchain, one command:** Python, TypeScript/JavaScript, Java, Shell, and secrets.
 
 ```sh
-docker run --rm ghcr.io/react-randy/diff-gremlin:1.0.1 pr https://github.com/OWNER/REPO/pull/123
+docker run --rm ghcr.io/react-randy/diff-gremlin:1.0.2 pr https://github.com/OWNER/REPO/pull/123
 ```
 
 For local code, mount the repo read-only:
@@ -35,7 +35,7 @@ For local code, mount the repo read-only:
 docker run --rm --read-only --cap-drop=ALL --security-opt=no-new-privileges \
   --network=none --tmpfs /tmp:rw,nosuid,nodev,size=1g \
   --mount "type=bind,src=$PWD,dst=/workspace,readonly" \
-  ghcr.io/react-randy/diff-gremlin:1.0.1 check /workspace
+  ghcr.io/react-randy/diff-gremlin:1.0.2 check /workspace
 ```
 
 ## Review a change
@@ -58,7 +58,8 @@ completed. [Usage and private repositories →](docs/usage.md)
 ## Evaluate a repository
 
 ```sh
-diff-gremlin check https://github.com/OWNER/REPO
+diff-gremlin check https://github.com/OWNER/REPO --profile quick
+diff-gremlin check https://github.com/OWNER/REPO --profile full
 diff-gremlin check . --ref HEAD
 diff-gremlin check . --format json > receipt.json
 ```
@@ -68,13 +69,17 @@ Git snapshot. The receipt records source identity, profile, policy version, tool
 findings, and missing evidence. Share the receipt alongside your adoption review;
 then inspect dependencies, tests, and project ownership yourself.
 
+Start with quick for a first look. Full adds clone searches and history, which
+can take minutes on a large repo. Ordinary binary assets stay outside text
+analysis; omitted possible source and analyzer limits appear in the receipt.
+
 ## Read the verdict
 
 | Result | Your next move |
 | --- | --- |
 | **Hold** | Stop the merge or adoption. Inspect the named blockers. |
 | **Review** | Start with the located findings and changed signals. |
-| **Unknown** | Fill the listed evidence gaps before treating the score as usable. |
+| **Unknown** | Use the provisional observations to focus your review; inspect the listed gaps. |
 | **No configured blockers** | Continue your review of tests, dependencies, and maintainers. |
 
 The gremlin brings receipts. You keep the merge button.
@@ -92,11 +97,18 @@ diff-gremlin check . --fail-under 80 --fail-on high --require-complete --format 
 | `2` | Usage, acquisition, or operational error |
 | `3` | Required evidence incomplete |
 
-A missing, failed, limited, unsupported, skipped, or timed-out required check makes
-the headline score **unknown**. It cannot become a passing number. Known blockers
-remain visible. Scores use a [versioned policy](docs/score-policy.md), with independent
+A scan keeps useful results when a check cannot finish. An **observed score** uses
+validated checks and shows measured category weight, partial categories, and
+completed stages beside it. It is provisional; the strict score stays **unknown**
+until every required check completes. Known blockers remain visible and CI gates
+keep their strict behavior. Scores use a [versioned policy](docs/score-policy.md), with independent
 clean and deliberately bad controls. A score is an observation, not a security or
 correctness certificate. It cannot tell you who wrote the code.
+
+Images and binary archives are outside text analysis and are listed in the scope
+receipt. They do not stop the source scan. Unreadable or omitted possible source
+remains an evidence gap. Text and Markdown show the top findings; JSON retains
+every finding, stage, and scope path. Less scrolling, same gremlin receipts.
 
 ## What gets checked
 

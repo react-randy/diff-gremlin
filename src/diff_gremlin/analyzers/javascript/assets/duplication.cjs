@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const [corePath, tokenizerPath, finderPath, requestPath, outputFlag, outputPath] = process.argv.slice(2);
 const core = require(corePath);
-const {Tokenizer} = require(tokenizerPath);
+const {Tokenizer, getSupportedFormats} = require(tokenizerPath);
 const {getFilesToDetect, InFilesDetector, JsonReporter} = require(finderPath);
 const limits = {minLines: 5, minTokens: 50, maxLines: 1000, maxSize: '100kb'};
 
@@ -26,7 +26,8 @@ async function observe(request) {
     const clones = await detector.detect(entries);
     const native = new JsonReporter(options).generateJson(clones, statistic.getStatistic());
     return {...native, invocation: request.invocation, options: limits,
-      requested_files: request.files, detector_files: detectorFiles};
+      requested_files: request.files, detector_files: detectorFiles,
+      tokenizer_formats: getSupportedFormats()};
   } finally {
     store.close();
   }

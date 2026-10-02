@@ -1,14 +1,18 @@
 """Measure production function cyclomatic complexity once with Lizard."""
 
+import time
 import xml.etree.ElementTree as ET
+from dataclasses import replace
 from functools import partial
 
+from diff_gremlin.analyzers.batches import collect_batches
 from diff_gremlin.analyzers.complexity_output import observations
-from diff_gremlin.analyzers.status import execution_status, unavailable
+from diff_gremlin.analyzers.status import unavailable
 from diff_gremlin.analyzers.versions import tool_version
-from diff_gremlin.domain.context import ScanContext
+from diff_gremlin.domain.context import ScanContext, SourceFile
 from diff_gremlin.domain.findings import Finding
-from diff_gremlin.domain.stages import StageResult
+from diff_gremlin.domain.process import RunResult
+from diff_gremlin.domain.stages import StageResult, StageStatus
 
 _ID = "complexity.lizard"
 SUPPORTED_SUFFIXES = frozenset(
@@ -88,6 +92,29 @@ def _coverage_reason(is_limited: bool, metrics: dict) -> str:
     return ""
 
 
+def _validated_batch(
+    ctx: ScanContext, files: tuple[SourceFile, ...], result: RunResult
+) -> list[dict]:
+    try:
+        return observations(ctx, files, result.stdout)
+    except (
+        ET.ParseError,
+        KeyError,
+        OSError,
+        UnicodeError,
+        SyntaxError,
+        RecursionError,
+    ) as error:
+        raise ValueError("invalid Lizard observations") from error
+
+
+def _result_status(status: StageStatus, reason: str, is_limited: bool) -> StageStatus:
+    """Retain transport gaps separately from known language coverage limits."""
+    if reason:
+        return status
+    return "limited" if is_limited else "ok"
+
+
 def analyze_complexity(ctx: ScanContext) -> StageResult:
     files = tuple(
         file
@@ -106,51 +133,38 @@ def analyze_complexity(ctx: ScanContext) -> StageResult:
         return failure(
             reason="No production files supported by Lizard", status="unsupported"
         )
-    result = ctx.run(
-        [
-            "lizard",
-            "--xml",
-            "--no-gitignore",
-            "--ignore_warnings",
-            "-1",
-            "--",
-            *(str(file.path) for file in files),
-        ],
-        cwd=ctx.scratch,
+    started = time.monotonic()
+    evidence = collect_batches(
+        ctx,
+        files,
+        ["lizard", "--xml", "--no-gitignore", "--ignore_warnings", "-1"],
+        (0,),
+        partial(_validated_batch, ctx),
     )
-    status = execution_status(result, (0,))
-    if status is not None:
-        return failure(
-            reason="Lizard execution did not complete valid analysis", status=status
-        )
-    try:
-        functions = observations(ctx, files, result.stdout)
-    except (
-        ET.ParseError,
-        ValueError,
-        TypeError,
-        KeyError,
-        OSError,
-        UnicodeError,
-        SyntaxError,
-        RecursionError,
-    ):
-        return failure(
-            reason="Lizard output failed schema or coverage validation", status="failed"
-        )
+    functions = evidence.values
     is_limited = any(file.path.suffix.lower() == ".scala" for file in files)
-    metrics, hotspots = _complexity_metrics(functions, is_limited)
+    metrics, hotspots = _complexity_metrics(
+        functions, is_limited or bool(evidence.reason)
+    )
     return StageResult(
         _ID,
         "Function complexity",
         "complexity",
-        "limited" if is_limited else "ok",
+        _result_status(evidence.status, evidence.reason, is_limited),
         "lizard",
-        version=tool_version(ctx, "lizard"),
-        metrics=metrics,
+        version=(
+            tool_version(replace(ctx, timeout=evidence.remaining_time()), "lizard")
+            if evidence.remaining_time() > 0
+            else ""
+        ),
+        metrics=metrics if evidence.analyzed else {},
         findings=_hotspot_findings(hotspots),
-        reason=_coverage_reason(is_limited, metrics),
-        analyzed_files=len(files),
+        reason=(
+            f"Lizard {evidence.reason}"
+            if evidence.reason
+            else _coverage_reason(is_limited, metrics)
+        ),
+        analyzed_files=evidence.analyzed,
         eligible_files=len(files),
-        duration_seconds=result.duration_seconds,
+        duration_seconds=time.monotonic() - started,
     )

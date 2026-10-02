@@ -2,12 +2,17 @@
 
 import re
 from bisect import bisect_right
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
+from diff_gremlin.domain.context import SourceFile
+from diff_gremlin.inventory import MAX_FILE_BYTES, MAX_TREE_BYTES
+
 CoordinateKind = Literal["javascript", "eslint", "typescript", "jdk", "javac"]
-_MAX_SOURCE_BYTES = 4 * 1024 * 1024
+_MAX_SOURCE_BYTES = MAX_TREE_BYTES
+_MAX_CACHED_LINES = 2_000_000
 _JS_BREAKS = re.compile(r"\r\n|[\r\n\u2028\u2029]")
 _JAVA_BREAKS = re.compile(r"\r\n|[\r\n]")
 
@@ -62,22 +67,34 @@ def _native_line(text: str, kind: CoordinateKind, *, eof: bool) -> _NativeLine:
 
 
 class SourceCoordinates:
-    """Cache only located source text under one cumulative read budget."""
+    """Validate located source under captured-size and cumulative resource bounds."""
 
-    def __init__(self) -> None:
+    def __init__(self, files: Sequence[SourceFile] = ()) -> None:
         self._remaining = _MAX_SOURCE_BYTES
+        self._line_remaining = _MAX_CACHED_LINES
+        self._expected = {str(file.path.resolve()): file.size_bytes for file in files}
         self._sources: dict[str, bytes] = {}
         self._lines: dict[tuple[str, CoordinateKind], tuple[_NativeLine, ...]] = {}
 
     def _source(self, path: str) -> bytes:
         if path not in self._sources:
+            expected = self._expected.get(path)
+            limit = min(self._remaining, MAX_FILE_BYTES)
+            if expected is not None:
+                limit = min(limit, expected)
             try:
                 with Path(path).open("rb") as stream:
-                    contents = stream.read(self._remaining + 1)
+                    contents = stream.read(limit + 1)
             except OSError as error:
                 raise ValueError("located source cannot be read") from error
             if len(contents) > self._remaining:
                 raise ValueError("located sources exceed coordinate read budget")
+            if len(contents) > MAX_FILE_BYTES:
+                raise ValueError(
+                    "located source exceeds per-file coordinate read budget"
+                )
+            if expected is not None and len(contents) != expected:
+                raise ValueError("located source differs from inventoried size")
             self._remaining -= len(contents)
             self._sources[path] = contents
         return self._sources[path]
@@ -86,6 +103,9 @@ class SourceCoordinates:
         key = path, kind
         if key not in self._lines:
             lines = _lines(_decode_source(self._source(path), kind), kind)
+            if len(lines) > self._line_remaining:
+                raise ValueError("located sources exceed coordinate line budget")
+            self._line_remaining -= len(lines)
             self._lines[key] = tuple(
                 _native_line(text, kind, eof=index == len(lines) - 1)
                 for index, text in enumerate(lines)

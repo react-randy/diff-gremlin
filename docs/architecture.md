@@ -40,6 +40,17 @@ Provider metadata records both repositories and full expected SHAs. Acquisition
 verifies those objects. Reports distinguish the provider base from the chosen
 comparison base and never silently follow a moving branch.
 
+`SourceScopeEntry` records intentionally excluded assets and omitted possible
+source. The additive snapshot manifest reaches inventory stage metrics and the
+receipt. Shared content classification separates text from signature-identified
+binary assets; suffixes alone cannot hide text. Security analyzers use the same
+scope, so ordinary images do not masquerade as failed text checks. Omitted
+possible source remains incomplete evidence.
+
+Policy keeps the strict assessment and CI gates separate from the additive
+provisional `ObservedAssessment`. Reports show both coverage boundaries. Human
+views prioritize findings; machine receipts retain the complete evidence.
+
 Analyzer location validation builds `SourceLocations` once per observation batch.
 Its canonical inventory belongs to that batch; each incoming path is resolved
 again and must map to an inventoried file. No global cache crosses snapshots.

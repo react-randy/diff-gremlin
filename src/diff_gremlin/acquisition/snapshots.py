@@ -46,11 +46,13 @@ def _ref_snapshot(
     git: Git, history: Path, commit: str, target: str, destination: Path
 ) -> Snapshot:
     pin_history(git, history, commit)
-    extract_tree(git, history, commit, destination)
+    scope_manifest = []
+    extract_tree(git, history, commit, destination, scope_manifest=scope_manifest)
     return Snapshot(
         destination,
         _identity(target, commit, git.date(history, commit), "commit"),
         history,
+        tuple(sorted(scope_manifest, key=lambda row: row.relative_path)),
     )
 
 
@@ -62,7 +64,14 @@ def _working_snapshot(
     commit: str,
     has_git: bool,
 ) -> Snapshot:
-    copied = copy_working_tree(source, destination, deadline=git.deadline)
+    scope_manifest = []
+    copied = copy_working_tree(
+        source,
+        destination,
+        deadline=git.deadline,
+        scope_manifest=scope_manifest,
+        oid_length=len(commit) if commit else 40,
+    )
     dirty = bool(copied) if has_git and not commit else False
     if commit and history is not None:
         pin_history(git, history, commit)
@@ -74,6 +83,7 @@ def _working_snapshot(
         destination,
         _identity(str(source), commit, date, "working-tree", dirty),
         history,
+        tuple(sorted(scope_manifest, key=lambda row: row.relative_path)),
     )
 
 

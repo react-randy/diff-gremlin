@@ -16,7 +16,7 @@ def dispatch(args) -> tuple[str, int]:
         from diff_gremlin.policy.thresholds import POLICY_VERSION, WEIGHTS
 
         return (
-            f"Policy {POLICY_VERSION}\nWeights: {WEIGHTS}\nRequired gaps produce unknown. Critical findings, CC>50, duplication>60% and missing license block.\nFull policy: https://github.com/react-randy/diff-gremlin/blob/main/docs/score-policy.md\nExits: 0 complete; 1 gate failure; 2 operation/usage error; 3 incomplete.\n",
+            f"Policy {POLICY_VERSION}\nWeights: {WEIGHTS}\nRequired gaps keep the strict score unknown. Provisional observed scores use only validated checks, show measured weight and never approve CI. Critical findings, CC>50, duplication>60% and missing license block.\nFull policy: https://github.com/react-randy/diff-gremlin/blob/main/docs/score-policy.md\nExits: 0 complete; 1 gate failure; 2 operation/usage error; 3 incomplete.\n",
             0,
         )
     return (

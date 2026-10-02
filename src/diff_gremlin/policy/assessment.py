@@ -4,6 +4,7 @@ from diff_gremlin.domain.assessment import Assessment
 from diff_gremlin.domain.stages import StageResult
 from diff_gremlin.policy.blockers import blockers
 from diff_gremlin.policy.metrics import stage_score
+from diff_gremlin.policy.observed import observed_assessment
 from diff_gremlin.policy.thresholds import WEIGHTS, grade
 
 
@@ -91,4 +92,5 @@ def assess(stages: list[StageResult]) -> Assessment:
         gaps,
         tuple(reasons),
         decision_for(stages, complete, reasons),
+        observed_assessment(stages, blocked=bool(reasons)),
     )

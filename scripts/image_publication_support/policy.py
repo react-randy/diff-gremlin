@@ -5,8 +5,8 @@ import re
 REPOSITORY = "react-randy/diff-gremlin"
 REPOSITORY_ID = 1400500531
 IMAGE = f"ghcr.io/{REPOSITORY}"
-TAG = "v1.0.1"
-VERSION = "1.0.1"
+TAG = "v1.0.2"
+VERSION = "1.0.2"
 ARCHITECTURES = ("amd64", "arm64")
 MANIFEST_TYPES = (
     "application/vnd.oci.image.index.v1+json",

@@ -15,10 +15,21 @@ class SourceIdentity:
 
 
 @dataclass(frozen=True, slots=True)
+class SourceScopeEntry:
+    """A declared exclusion or omission from current text analysis."""
+
+    relative_path: str
+    size_bytes: int
+    classification: str
+    reason: str
+
+
+@dataclass(frozen=True, slots=True)
 class Snapshot:
     root: Path
     identity: SourceIdentity
     history_repo: Path | None = None
+    scope_manifest: tuple[SourceScopeEntry, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)

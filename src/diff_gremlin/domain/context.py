@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from diff_gremlin.domain.process import Runner, RunResult
+from diff_gremlin.domain.sources import SourceScopeEntry
 
 
 @dataclass(frozen=True, slots=True)
@@ -16,6 +17,7 @@ class SourceFile:
     language: str
     is_test: bool
     size_bytes: int
+    classification: str = "text"
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,6 +32,7 @@ class ScanContext:
     timeout: float
     scratch: Path
     runner: Runner
+    scope_manifest: tuple[SourceScopeEntry, ...] = ()
 
     def run(
         self,

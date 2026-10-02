@@ -1,6 +1,6 @@
 # Reviewed toolchain
 
-Diff Gremlin 1.0.1 uses static analyzers without target installation or builds.
+Diff Gremlin 1.0.2 uses static analyzers without target installation or builds.
 Pins were reviewed on 2026-10-01, using packages available before 2026-09-24.
 The package needs no model API or model-specific configuration.
 
@@ -8,7 +8,7 @@ The package needs no model API or model-specific configuration.
 | --- | --- | --- |
 | Python lint | Ruff 0.16.8 | Located diagnostics under scanner-owned settings |
 | Python types | Pyrefly 1.3.0 | Isolated static type checks; uninstalled external imports can limit evidence |
-| Python health/clones/dead code | PyScn 1.32.1 | Validated stdout JSON; optional platform wheel; full profile only |
+| Python health/clones/dead code | PyScn 1.32.1 | Separate independent dead-code evidence and combined clone/health evidence; one shared deadline; full profile only |
 | Python and other recognized language complexity | Lizard 1.24.0 | One observation per production function; Python AST accounts for branch-free ellipsis declarations; parser limits remain visible |
 | JavaScript/TypeScript complexity | ESLint 10.11.0 | Native classic function and class initializer/static-block code paths, with independent coverage counts |
 | Python maintainability | Radon 6.0.1 | Informational MI from the shipped driver; full profile only |
@@ -20,11 +20,12 @@ The package needs no model API or model-specific configuration.
 | Shell syntax/complexity | shfmt 3.14.1 | Declared POSIX sh/dash, Bash and mksh; bounded validated AST; function decision estimate v1 |
 | Contextual security | Shipped source checks | Located Unicode/execution observations; no blanket penalty for ordinary subprocess use |
 | Hygiene | Shipped inventory checks | License, README, observed test files, gitignore; presence does not prove quality |
-| Python history | Shipped bounded Git/AST checks | Informational complexity samples at immutable revisions; full profile only |
+| Python history | Shipped bounded Git/AST checks | Immutable samples, metadata-sized blob batches, up to 20,000 files/256 MiB per commit and 8 MiB per file; full profile only |
 
 Mixed repositories retain distinct stage IDs. Unsupported languages can receive
 applicable inventory/security/hygiene evidence; this is not a full lint/type check
-for every language. Required gaps make the score unknown. A shipped binary's
+for every language. Required gaps keep the strict score unknown; provisional
+observed scores show their measured stage/category scope. A shipped binary's
 availability does not prove that a target's imports or syntax can be fully analyzed.
 
 ## Shell evidence
@@ -64,8 +65,18 @@ zero clones. A five-line source below the token window can have genuine zero clo
 observations; this does not prove that shorter similarities are absent.
 
 Clone ranges must fit the copied source, including UTF-16 columns and native line
-boundaries. Invalid, stale or oversized reports fail the check; report reads are
-capped at 4 MiB. The raw native report and source fragments are never published.
+boundaries. The measure `jscpd-native-clone-incidence-v1` sums native clone
+incidences; it is not the share of unique duplicated lines. Overlapping clones
+can make a per-source incidence percentage exceed 100. Counter/ratio checks and
+the trusted tokenizer's embedded-format catalog validate this native behavior.
+
+jscpd 4.2.3 can produce impossible second clone endpoints while extending a
+match across sources. Recognized coordinate-invalid records are counted and
+rejected; verified clone findings remain visible with **limited** evidence.
+When this occurs, the native incidence percentage is unscored telemetry and
+`duplication_percent` is absent. No location is repaired or reordered. Foreign
+identities, malformed schemas, stale or oversized reports still fail the check;
+report reads are capped at 4 MiB. Raw reports and source fragments are private.
 
 ## Python delivery
 
@@ -151,7 +162,9 @@ script operands and runtime reachability remain unresolved. Windows interpreter
 forms have static fixture coverage, without a claim of Windows runtime testing.
 
 Located JS/TS and JDK diagnostics must fit the invocation's copied source. Each
-located report has one cumulative 4-MiB source-read budget. JavaScript coordinates
+located report uses the captured source sizes, an 8-MiB per-file read bound,
+a 256-MiB cumulative read bound, and a separate two-million-line cache bound.
+Read sizes must match the captured inventory. JavaScript coordinates
 use UTF-16 units and native line separators; compiler/lint BOM handling is distinct
 from the syntax observer. JDK columns include eight-column tab stops, with
 separate tree and diagnostic EOF conventions. Unreadable sources, invalid

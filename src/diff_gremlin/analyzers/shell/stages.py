@@ -1,7 +1,6 @@
 """Adapt validated Shell syntax and function decisions to stage evidence."""
 
-from diff_gremlin.analyzers.shell.calls import call_findings
-from diff_gremlin.analyzers.shell.decisions import MEASURE, function_rows
+from diff_gremlin.analyzers.shell.decisions import MEASURE
 from diff_gremlin.analyzers.shell.parser import Parsed, parse_files
 from diff_gremlin.domain.context import ScanContext, SourceFile
 from diff_gremlin.domain.findings import Finding
@@ -31,7 +30,7 @@ def stage(
         version=parsed.version,
         findings=list(parsed.findings),
         reason="; ".join(parsed.reasons),
-        analyzed_files=len(parsed.trees),
+        analyzed_files=parsed.analyzed,
         eligible_files=len(files),
         duration_seconds=parsed.duration,
     )
@@ -45,7 +44,7 @@ def analyze_shell_syntax(ctx: ScanContext) -> StageResult:
         ctx, files, parsed, "shell.syntax.shfmt", "Shell syntax", "structure"
     )
     result.scope = "all-inventoried-shell"
-    if parsed.trees:
+    if parsed.analyzed:
         result.metrics = {
             "syntax_version": "shfmt-json-3.14.1",
             "syntax_errors": len(parsed.findings),
@@ -92,12 +91,8 @@ def analyze_shell_complexity(ctx: ScanContext) -> StageResult:
     result = stage(
         ctx, files, parsed, "complexity.shell", "Shell function decisions", "complexity"
     )
-    if parsed.trees:
-        rows = [
-            row
-            for file, tree in parsed.trees
-            for row in function_rows(tree, file.relative_path)
-        ]
+    if parsed.analyzed:
+        rows = parsed.functions
         result.metrics, hotspots = complexity_metrics(rows)
         result.findings.extend(hotspot_findings(hotspots))
     return result
@@ -111,9 +106,5 @@ def shell_observations(
         return [], 0, ""
     parsed = parse_files(ctx, files)
     findings = list(parsed.findings)
-    findings.extend(
-        finding
-        for file, tree in parsed.trees
-        for finding in call_findings(tree, file.relative_path)
-    )
-    return findings, len(parsed.trees), "; ".join(parsed.reasons)
+    findings.extend(parsed.calls)
+    return findings, parsed.analyzed, "; ".join(parsed.reasons)

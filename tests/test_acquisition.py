@@ -364,16 +364,24 @@ def test_working_copy_failure_preserves_source_bytes(limit, tmp_path, monkeypatc
     source.mkdir()
     (source / "code.py").write_bytes(b"captured bytes")
     if limit == "file":
-        monkeypatch.setattr(working_reads, "MAX_FILE_BYTES", 2)
+        monkeypatch.setattr(working, "MAX_FILE_BYTES", 2)
     elif limit == "tree":
         monkeypatch.setattr(working, "MAX_TREE_BYTES", 2)
     elif limit == "entries":
         monkeypatch.setattr(working, "MAX_ENTRIES", 0)
-    with (
-        pytest.raises(RuntimeError, match="limits"),
-        acquire_source(str(source)),
-    ):
-        pytest.fail("copy limit must prevent snapshot delivery")
+    if limit == "entries":
+        with (
+            pytest.raises(RuntimeError, match="limits"),
+            acquire_source(str(source)),
+        ):
+            pytest.fail("entry limit must prevent snapshot delivery")
+    else:
+        with acquire_source(str(source)) as snapshot:
+            assert len(snapshot.scope_manifest) == 1
+            omission = snapshot.scope_manifest[0]
+            assert omission.relative_path == "code.py"
+            assert omission.classification == "possible-source"
+            assert not (snapshot.root / "code.py").exists()
     assert (source / "code.py").read_bytes() == b"captured bytes"
 
 

@@ -14,6 +14,8 @@ from diff_gremlin.analyzers.versions import tool_version
 from diff_gremlin.domain.context import ScanContext
 from diff_gremlin.domain.findings import Finding
 from diff_gremlin.domain.stages import StageResult
+from diff_gremlin.inventory import MAX_FILE_BYTES
+from diff_gremlin.text_content import omitted_paths, read_text
 
 _PROVIDER_RULES = (
     (
@@ -64,15 +66,15 @@ def _matches(text: str) -> list[tuple[str, int]]:
 
 
 def _analyze_patterns(ctx: ScanContext) -> StageResult:
-    findings, skipped = [], []
+    findings, skipped = [], omitted_paths(ctx)
     analyzed = 0
     for file in ctx.files:
-        if file.size_bytes > 1024 * 1024:
+        if file.classification != "text":
             skipped.append(file.relative_path)
             continue
         try:
-            text = file.path.read_text(encoding="utf-8")
-        except (OSError, UnicodeError):
+            text = read_text(file)
+        except (OSError, UnicodeError, ValueError):
             skipped.append(file.relative_path)
             continue
         if "\x00" in text:
@@ -106,10 +108,10 @@ def _analyze_patterns(ctx: ScanContext) -> StageResult:
         },
         findings=findings,
         reason="Limited provider/private-key/assignment heuristics in current UTF-8 text; no match does not establish absence of secrets"
-        + ("; unreadable/binary/large files omitted" if skipped else ""),
+        + ("; unreadable/possible-source files omitted" if skipped else ""),
         scope="current-inventoried-text",
         analyzed_files=analyzed,
-        eligible_files=len(ctx.files),
+        eligible_files=len(ctx.files) + len(omitted_paths(ctx)),
     )
 
 
@@ -152,9 +154,9 @@ def _gitleaks_findings(report: Path, source: Path, selected: set[str]) -> list[F
 
 
 def _copy_text(file, source):
-    if file.size_bytes > 1024 * 1024:
+    if file.classification != "text":
         return False
-    text = file.path.read_text(encoding="utf-8")
+    text = read_text(file)
     if "\x00" in text:
         return False
     destination = source / file.relative_path
@@ -207,7 +209,7 @@ def _invoke_gitleaks(ctx, binary, source, workspace, report):
             "--max-archive-depth",
             "0",
             "--max-target-megabytes",
-            "1",
+            str((MAX_FILE_BYTES + 999999) // 1000000),
         ],
         cwd=workspace,
     )
@@ -231,6 +233,7 @@ def analyze_secrets(ctx: ScanContext) -> StageResult:
         workspace = Path(directory)
         source = workspace / "source"
         selected, skipped = _source_view(ctx.files, source)
+        skipped.extend(omitted_paths(ctx))
         report = workspace / "report.json"
         result = _invoke_gitleaks(ctx, binary, source, workspace, report)
         if not valid_run(result, (0, 1)):
@@ -241,7 +244,7 @@ def analyze_secrets(ctx: ScanContext) -> StageResult:
                 "gitleaks",
                 f"Controlled Gitleaks invocation {result.status}; exit {result.returncode}",
                 status=failure_status(result),
-                eligible_files=len(ctx.files),
+                eligible_files=len(ctx.files) + len(omitted_paths(ctx)),
             )
         try:
             findings = _report_findings(result, report, source, selected)
@@ -253,7 +256,7 @@ def analyze_secrets(ctx: ScanContext) -> StageResult:
                 "gitleaks",
                 "Fresh Gitleaks JSON missing, malformed, or inconsistent with exit/selected inventory",
                 status="failed",
-                eligible_files=len(ctx.files),
+                eligible_files=len(ctx.files) + len(omitted_paths(ctx)),
             )
     return StageResult(
         "security.secrets",
@@ -269,9 +272,9 @@ def analyze_secrets(ctx: ScanContext) -> StageResult:
         },
         findings=findings,
         reason="Controlled upstream v8.30.1 rules with global filename exclusions removed, target suppressions disabled; no match does not establish absence of secrets; archives/decoding/history excluded"
-        + ("; unreadable/binary/large files omitted" if skipped else ""),
+        + ("; unreadable/possible-source files omitted" if skipped else ""),
         scope="current-inventoried-text",
         analyzed_files=len(selected),
-        eligible_files=len(ctx.files),
+        eligible_files=len(ctx.files) + len(omitted_paths(ctx)),
         duration_seconds=result.duration_seconds,
     )

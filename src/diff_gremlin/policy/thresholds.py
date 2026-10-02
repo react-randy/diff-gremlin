@@ -1,6 +1,6 @@
 """Independent, published calibration for policy v1."""
 
-POLICY_VERSION = "1.0.0"
+POLICY_VERSION = "1.1.0"
 WEIGHTS = {
     "lint": 15,
     "types": 20,

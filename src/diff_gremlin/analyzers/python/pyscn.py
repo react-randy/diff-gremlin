@@ -1,5 +1,6 @@
-"""Expose independent facts from one fresh controlled PyScn JSON run."""
+"""Preserve independently validated PyScn facts within one shared deadline."""
 
+import time
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -49,7 +50,9 @@ def _health(data: dict) -> tuple[dict, list]:
     }, []
 
 
-def _run_pyscn(ctx: ScanContext, files: tuple[SourceFile, ...]) -> RunResult:
+def _run_pyscn(
+    ctx: ScanContext, files: tuple[SourceFile, ...], selection: str, timeout: float
+) -> RunResult:
     with TemporaryDirectory(prefix="pyscn-", dir=ctx.scratch) as directory:
         config = Path(directory) / "pyscn.toml"
         config.write_text("", encoding="utf-8")
@@ -57,6 +60,8 @@ def _run_pyscn(ctx: ScanContext, files: tuple[SourceFile, ...]) -> RunResult:
             [
                 "pyscn",
                 "analyze",
+                "--select",
+                selection,
                 "--config",
                 str(config),
                 "--json",
@@ -67,6 +72,9 @@ def _run_pyscn(ctx: ScanContext, files: tuple[SourceFile, ...]) -> RunResult:
                 *(str(file.path) for file in files),
             ],
             cwd=ctx.scratch,
+            timeout=timeout,
+            output_limit=64 * 1024 * 1024,
+            data_output=True,
         )
 
 
@@ -124,20 +132,21 @@ def _component_stages(
     return stages
 
 
-def analyze_pyscn(ctx: ScanContext) -> list[StageResult]:
-    files = tuple(file for file in ctx.production_files if file.language == "python")
-    if not files:
-        return _unobserved("No production Python files", "unsupported", 0)
-    try:
-        result = _run_pyscn(ctx, files)
-    except OSError:
-        return _unobserved(
-            "Could not create controlled PyScn configuration", "failed", len(files)
-        )
+def _run_observations(
+    ctx: ScanContext, files: tuple[SourceFile, ...], result: RunResult
+) -> list[StageResult]:
+    """Validate a fresh invocation without borrowing another run's coverage."""
     status = execution_status(result, (0,))
     if status is not None:
         return _unobserved(
-            "PyScn execution did not complete valid analysis", status, len(files)
+            "PyScn execution did not complete valid analysis"
+            + (
+                " within the scan deadline; use --timeout to allow more time"
+                if status == "timeout"
+                else ""
+            ),
+            status,
+            len(files),
         )
     try:
         data = object_value(json_value(result.stdout))
@@ -151,3 +160,34 @@ def analyze_pyscn(ctx: ScanContext) -> list[StageResult]:
     return _component_stages(
         ctx, files, data, analyzed, partial, result.duration_seconds
     )
+
+
+def _observe_selection(
+    ctx: ScanContext, files: tuple[SourceFile, ...], selection: str, timeout: float
+) -> list[StageResult]:
+    """Own one controlled configuration and its failure boundary."""
+    if timeout <= 0:
+        return _run_observations(ctx, files, RunResult((), None, status="timeout"))
+    try:
+        result = _run_pyscn(ctx, files, selection, timeout)
+    except OSError:
+        return _unobserved(
+            "Could not create controlled PyScn configuration", "failed", len(files)
+        )
+    return _run_observations(ctx, files, result)
+
+
+def analyze_pyscn(ctx: ScanContext) -> list[StageResult]:
+    """Preserve independent dead-code facts when clone search exhausts its budget."""
+    files = tuple(file for file in ctx.production_files if file.language == "python")
+    if not files:
+        return _unobserved("No production Python files", "unsupported", 0)
+    deadline = time.monotonic() + ctx.timeout
+    independent = _observe_selection(ctx, files, "complexity,deadcode", ctx.timeout)
+    if independent[2].status in {"timeout", "missing"}:
+        return independent
+    stages = _observe_selection(
+        ctx, files, "complexity,deadcode,clones", deadline - time.monotonic()
+    )
+    stages[2] = independent[2]
+    return stages

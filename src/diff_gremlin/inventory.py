@@ -2,36 +2,21 @@
 
 import os
 import stat
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
+from itertools import islice
 from pathlib import Path
 
 from diff_gremlin.domain.context import SourceFile
 from diff_gremlin.domain.findings import Finding
+from diff_gremlin.domain.sources import SourceScopeEntry
 from diff_gremlin.domain.stages import StageResult
+from diff_gremlin.source_paths import EXCLUDED_DIRECTORIES, in_scope
+from diff_gremlin.source_scope import classify_content
 
 MAX_FILES = 20000
 MAX_FILE_BYTES = 8 * 1024 * 1024
 MAX_TREE_BYTES = 256 * 1024 * 1024
 MAX_ENTRIES = 100000
-EXCLUDED_DIRECTORIES = {
-    ".git": "Git metadata is inspected separately",
-    "node_modules": "installed dependencies",
-    "vendor": "vendored dependencies",
-    ".venv": "Python environment",
-    "venv": "Python environment",
-    "__pycache__": "Python bytecode",
-    ".mypy_cache": "type-check cache",
-    ".pytest_cache": "test cache",
-    ".ruff_cache": "lint cache",
-    ".pyscn": "analyzer artifacts",
-    ".wily": "history cache",
-    "target": "Rust/build artifacts",
-    "build": "build artifacts",
-    "dist": "distribution artifacts",
-    ".next": "framework build artifacts",
-    ".gradle": "Gradle cache",
-    ".idea": "editor metadata",
-}
 LANGUAGES = {
     ".py": "python",
     ".pyi": "python",
@@ -72,6 +57,7 @@ class Inventory:
     production_files: tuple[SourceFile, ...]
     languages: tuple[str, ...]
     stage: StageResult
+    scope_manifest: tuple[SourceScopeEntry, ...] = ()
 
 
 def is_test_path(path: Path) -> bool:
@@ -99,11 +85,20 @@ class InventoryState:
     issues: list[Finding] = field(default_factory=list)
     exclusions: dict[str, int] = field(default_factory=dict)
     total: int = 0
+    read_total: int = 0
     entries: int = 0
     capped: bool = False
+    scope_manifest: list[SourceScopeEntry] = field(default_factory=list)
+    manifest_paths: set[str] = field(default_factory=set)
 
-    def issue(self, path: Path, reason: str) -> None:
-        self.issues.append(_issue(path.as_posix(), reason))
+    def issue(self, path: Path, reason: str, size: int = 0) -> None:
+        relative = path.as_posix()
+        self.issues.append(_issue(relative, reason))
+        if relative not in self.manifest_paths:
+            self.manifest_paths.add(relative)
+            self.scope_manifest.append(
+                SourceScopeEntry(relative, size, "possible-source", reason)
+            )
 
     def limit_reached(self, relative: Path) -> bool:
         self.entries += 1
@@ -115,11 +110,30 @@ class InventoryState:
 
 
 def inventory_file(state: InventoryState, child, relative: Path, size: int) -> None:
-    if size > MAX_FILE_BYTES or state.total + size > MAX_TREE_BYTES:
-        state.issue(relative, "Inventory byte limit reached")
+    budget = MAX_TREE_BYTES - state.read_total
+    if budget <= 0:
+        state.issue(relative, "Inventory content read budget reached", size)
         return
     with open(child.path, "rb") as stream:
-        stream.read(1)
+        content = stream.read(min(MAX_FILE_BYTES + 1, budget))
+    state.read_total += len(content)
+    classification, reason = classify_content(relative.as_posix(), content)
+    if classification == "binary-asset":
+        state.scope_manifest.append(
+            SourceScopeEntry(relative.as_posix(), size, classification, reason)
+        )
+        state.manifest_paths.add(relative.as_posix())
+        return
+    if (
+        size > MAX_FILE_BYTES
+        or len(content) > MAX_FILE_BYTES
+        or len(content) != size
+        or state.total + size > MAX_TREE_BYTES
+    ):
+        state.issue(relative, "Inventory byte limit reached", size)
+        return
+    if classification == "possible-source":
+        state.issue(relative, reason, size)
     state.total += size
     state.files.append(
         SourceFile(
@@ -128,6 +142,7 @@ def inventory_file(state: InventoryState, child, relative: Path, size: int) -> N
             LANGUAGES.get(relative.suffix.lower(), ""),
             is_test_path(relative),
             size,
+            classification,
         )
     )
 
@@ -154,7 +169,8 @@ def inventory_directory(
 ) -> None:
     try:
         with os.scandir(directory) as children:
-            for child in children:
+            bounded = islice(children, max(1, MAX_ENTRIES - state.entries + 1))
+            for child in sorted(bounded, key=lambda child: child.name):
                 relative = Path(child.path).relative_to(state.root)
                 if state.limit_reached(relative):
                     break
@@ -167,6 +183,7 @@ def inventory_directory(
 
 
 def inventory_stage(state: InventoryState) -> StageResult:
+    present = {file.relative_path for file in state.files}
     return StageResult(
         "inventory",
         "Source inventory",
@@ -175,7 +192,22 @@ def inventory_stage(state: InventoryState) -> StageResult:
         "builtin",
         metrics={
             "files": len(state.files),
+            "text_files": sum(f.classification == "text" for f in state.files),
+            "binary_asset_files": sum(
+                row.classification == "binary-asset" for row in state.scope_manifest
+            ),
+            "omitted_possible_source_files": sum(
+                row.classification == "possible-source" for row in state.scope_manifest
+            ),
+            "scope_manifest": [
+                asdict(row)
+                for row in sorted(
+                    state.scope_manifest, key=lambda row: row.relative_path
+                )
+            ],
+            "text_scope": "UTF-8 without NUL; signature-identified binary assets excluded; archives, embedded content and alternate encodings not analyzed",
             "bytes": state.total,
+            "content_bytes_read": state.read_total,
             "entries": state.entries,
             "excluded_directories": state.exclusions,
             "exclusion_reasons": EXCLUDED_DIRECTORIES.copy(),
@@ -188,23 +220,51 @@ def inventory_stage(state: InventoryState) -> StageResult:
         reason="Some source paths were not inventoried" if state.issues else "",
         scope="all",
         analyzed_files=len(state.files),
-        eligible_files=len(state.files) + len(state.issues),
+        eligible_files=len(state.files)
+        + sum(
+            row.classification == "possible-source" and row.relative_path not in present
+            for row in state.scope_manifest
+        ),
     )
 
 
-def collect_inventory(root: Path) -> Inventory:
-    """Count regular in-scope files without traversing a symbolic link."""
-    root = Path(root)
-    if root.is_symlink() or not root.is_dir():
-        raise ValueError("Inventory root must be a regular directory")
-    state = InventoryState(root)
-    pending = [root]
-    while pending and not state.capped:
-        inventory_directory(state, pending.pop(), pending)
+def _inventory_state(
+    root: Path, scope_manifest: tuple[SourceScopeEntry, ...]
+) -> InventoryState:
+    """Merge captured omissions into the initial inventory coverage state."""
+    scope_manifest = tuple(row for row in scope_manifest if in_scope(row.relative_path))
+    state = InventoryState(
+        root,
+        scope_manifest=list(scope_manifest),
+        manifest_paths={row.relative_path for row in scope_manifest},
+    )
+    for row in scope_manifest:
+        if row.classification != "binary-asset":
+            state.issue(Path(row.relative_path), row.reason)
+    return state
+
+
+def _inventory_result(state: InventoryState) -> Inventory:
+    """Freeze collected state into deterministic analyzer inputs and coverage."""
     state.files.sort(key=lambda source: source.relative_path)
     return Inventory(
         tuple(state.files),
         tuple(f for f in state.files if f.language and not f.is_test),
         tuple(sorted({f.language for f in state.files if f.language})),
         inventory_stage(state),
+        tuple(sorted(state.scope_manifest, key=lambda row: row.relative_path)),
     )
+
+
+def collect_inventory(
+    root: Path, scope_manifest: tuple[SourceScopeEntry, ...] = ()
+) -> Inventory:
+    """Count regular in-scope files without traversing a symbolic link."""
+    root = Path(root)
+    if root.is_symlink() or not root.is_dir():
+        raise ValueError("Inventory root must be a regular directory")
+    state = _inventory_state(root, scope_manifest)
+    pending = [root]
+    while pending and not state.capped:
+        inventory_directory(state, pending.pop(), pending)
+    return _inventory_result(state)
