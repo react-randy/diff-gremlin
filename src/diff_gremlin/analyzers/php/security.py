@@ -3,11 +3,28 @@
 import time
 
 from diff_gremlin.analyzers.php.security_rules import observe_php_tokens
+from diff_gremlin.analyzers.php.token_model import PHPFileTokens
 from diff_gremlin.analyzers.php.tokens import collect_php_tokens
 from diff_gremlin.domain.context import ScanContext
+from diff_gremlin.domain.findings import Finding
 from diff_gremlin.domain.stages import StageResult
 
 _LIMIT = "Contextual token observations with approximate lexical request aliases; no whole-program dataflow, reachability or exploitability inference"
+
+
+def _observe_files(
+    files: list[PHPFileTokens], deadline: float, reasons: list[str]
+) -> tuple[list[Finding], int]:
+    findings: list[Finding] = []
+    completed = 0
+    for file in files:
+        try:
+            findings.extend(observe_php_tokens(file, deadline=deadline))
+        except TimeoutError:
+            reasons.append("PHP security token time budget exhausted")
+            break
+        completed += 1
+    return findings, completed
 
 
 def analyze_php_security(ctx: ScanContext) -> StageResult:
@@ -25,16 +42,8 @@ def analyze_php_security(ctx: ScanContext) -> StageResult:
     deadline = time.monotonic() + ctx.timeout
     batch = collect_php_tokens(ctx, files)
     parsed = [file for file in batch.files if not file.parse_error_line]
-    findings = []
     reasons = list(batch.reasons)
-    completed = 0
-    for file in parsed:
-        try:
-            findings.extend(observe_php_tokens(file, deadline=deadline))
-        except TimeoutError:
-            reasons.append("PHP security token time budget exhausted")
-            break
-        completed += 1
+    findings, completed = _observe_files(parsed, deadline, reasons)
     if len(parsed) != len(batch.files):
         reasons.append(
             "PHP syntax errors prevent security token observations for affected files"

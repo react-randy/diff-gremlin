@@ -146,3 +146,11 @@ def test_security_token_deadline_preserves_earlier_complete_file(
     assert result.status == "limited" and result.analyzed_files == 1
     assert len(result.findings) == 1
     assert "time budget" in result.reason
+
+
+@pytest.mark.parametrize("newline", ["\n", "\r\n", "\r"])
+def test_native_security_coordinates_follow_php_newlines(tmp_path, native_php, newline):
+    source = newline.join(["<?php", "// comment", "  eval($_GET['code']);"])
+    result = analyze_php_security(context(tmp_path, {"risk.php": source}))
+    assert result.status == "ok" and result.analyzed_files == 1
+    assert [(item.line, item.column) for item in result.findings] == [(3, 3)]

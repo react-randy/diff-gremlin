@@ -207,6 +207,11 @@ def test_native_large_inventoried_source_and_non_utf8_tokens(tmp_path, native_ph
         },
     )
     ctx.files[1].path.write_bytes(b"<?php echo 'latin\xff';")
+    files = (
+        ctx.files[0],
+        replace(ctx.files[1], size_bytes=ctx.files[1].path.stat().st_size),
+    )
+    ctx = replace(ctx, files=files, production_files=files)
     result = analyze_php_syntax(ctx)
     assert result.status == "ok" and result.analyzed_files == 2
 
@@ -216,3 +221,58 @@ def test_oversized_inventory_entry_retains_explicit_gap(tmp_path, native_php):
     result = analyze_php_syntax(ctx)
     assert result.status == "limited" and result.analyzed_files == 0
     assert "byte/path budget" in result.reason
+
+
+@pytest.mark.parametrize("newline", ["\n", "\r\n", "\r"])
+def test_native_php_newline_tokens_and_parse_errors(tmp_path, native_php, newline):
+    ctx = context(
+        tmp_path,
+        {
+            "good.php": newline.join(["<?php", "// comment", "  eval($x);"]),
+            "bad.php": newline.join(["<?php", "// comment", "function broken( {"]),
+        },
+    )
+    batch = tokens.collect_php_tokens(ctx, ctx.files)
+    assert batch.status == "ok"
+    observed = next(token for token in batch.files[0].tokens if token.kind == "T_EVAL")
+    assert (observed.line, observed.column) == (3, 3)
+    assert batch.files[1].parse_error_line == 3
+
+
+@pytest.mark.parametrize("source", [b"<?php echo 100;", b"<?php"])
+def test_source_size_changes_after_inventory_are_coverage_gaps(
+    tmp_path, native_php, source
+):
+    ctx = context(tmp_path, {"a.php": "<?php echo 1;"})
+    ctx.files[0].path.write_bytes(source)
+    stage = analyze_php_syntax(ctx)
+    assert stage.status == "limited" and stage.analyzed_files == 0
+    assert stage.metrics == {}
+
+
+def test_actual_read_stays_bounded_when_source_grows(tmp_path, monkeypatch):
+    from diff_gremlin.analyzers.php.token_source import MAX_SOURCE
+
+    ctx = context(tmp_path, {"a.php": "<?php echo 1;"})
+    path = ctx.files[0].path
+    path.write_bytes(b"x" * (MAX_SOURCE + 1024))
+    original_open = Path.open
+    requested = []
+
+    class BoundedReader:
+        def __enter__(self):
+            self.stream = original_open(path, "rb")
+            return self
+
+        def __exit__(self, *_):
+            self.stream.close()
+
+        def read(self, size):
+            requested.append(size)
+            assert size == MAX_SOURCE + 1
+            return self.stream.read(size)
+
+    monkeypatch.setattr(Path, "open", lambda *_: BoundedReader())
+    with pytest.raises(ValueError, match="byte budget"):
+        tokens._source(ctx, ctx.files[0])
+    assert requested == [MAX_SOURCE + 1]
