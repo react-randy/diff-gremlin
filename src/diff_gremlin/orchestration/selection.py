@@ -132,11 +132,61 @@ def builtin_capabilities() -> list[Capability]:
     ]
 
 
+def php_capabilities() -> list[Capability]:
+    from diff_gremlin.analyzers.complexity import analyze_php_complexity
+    from diff_gremlin.analyzers.php.duplication import analyze_php_duplication
+    from diff_gremlin.analyzers.php.security import analyze_php_security
+    from diff_gremlin.analyzers.php.syntax import analyze_php_syntax
+    from diff_gremlin.analyzers.php.types import analyze_php_types
+
+    return [
+        Capability("php.syntax.php", "PHP syntax", "structure", analyze_php_syntax),
+        Capability(
+            "php.types.phpstan", "PHP snapshot types", "types", analyze_php_types
+        ),
+        Capability(
+            "complexity.php",
+            "PHP function complexity",
+            "complexity",
+            analyze_php_complexity,
+        ),
+        Capability(
+            "security.php",
+            "PHP security observations",
+            "security",
+            analyze_php_security,
+        ),
+        Capability(
+            "php.duplication.jscpd",
+            "PHP clones",
+            "duplication",
+            analyze_php_duplication,
+            True,
+        ),
+    ]
+
+
+def blade_capabilities() -> list[Capability]:
+    from diff_gremlin.analyzers.php.scope import analyze_blade_scope
+
+    return [
+        Capability(
+            "php.templates.blade",
+            "Blade template coverage",
+            "structure",
+            analyze_blade_scope,
+        )
+    ]
+
+
 def capabilities(languages: tuple[str, ...]) -> list[Capability]:
     from diff_gremlin.analyzers.complexity import analyze_complexity
 
+    observed = set(languages)
     result = builtin_capabilities()
-    if set(languages) - {"javascript", "typescript", "shell"}:
+    if observed and not observed - {"php", "php-blade"}:
+        result = [cap for cap in result if cap.id != "security.execution"]
+    if observed - {"javascript", "typescript", "shell", "php", "php-blade"}:
         result.append(
             Capability(
                 "complexity.lizard",
@@ -145,14 +195,17 @@ def capabilities(languages: tuple[str, ...]) -> list[Capability]:
                 analyze_complexity,
             )
         )
-    if "python" in languages:
-        result.extend(python_capabilities())
-    if set(languages) & {"javascript", "typescript"}:
-        result.extend(javascript_capabilities(languages))
-    if "java" in languages:
-        result.extend(java_capabilities())
-    if "shell" in languages:
-        result.extend(shell_capabilities())
+    builders = (
+        ({"python"}, python_capabilities),
+        ({"javascript", "typescript"}, lambda: javascript_capabilities(languages)),
+        ({"java"}, java_capabilities),
+        ({"shell"}, shell_capabilities),
+        ({"php"}, php_capabilities),
+        ({"php-blade"}, blade_capabilities),
+    )
+    for supported, build in builders:
+        if observed & supported:
+            result.extend(build())
     return result
 
 

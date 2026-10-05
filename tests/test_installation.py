@@ -55,13 +55,16 @@ def installer_fixture(tmp_path, *, corrupt_wheel=False):
     assets = tmp_path / "assets"
     assets.mkdir()
     wheel = b"owned wheel verification fixture"
-    wheel_name = "diff_gremlin-1.0.3-py3-none-any.whl"
+    wheel_name = "diff_gremlin-1.1.0-py3-none-any.whl"
     (assets / wheel_name).write_bytes(wheel + b"corrupt" if corrupt_wheel else wheel)
     (assets / "full-requirements.txt").write_text("# owned requirements fixture\n")
     provisioner = "import pathlib,sys\npathlib.Path(sys.argv[1], 'gitleaks').write_text('fixture')\n"
     (assets / "provision_gitleaks.py").write_text(provisioner)
     (assets / "provision_shfmt.py").write_text(
         provisioner.replace("'gitleaks'", "'shfmt'")
+    )
+    (assets / "provision_phpstan.py").write_text(
+        provisioner.replace("'gitleaks'", "'phpstan.phar'")
     )
     (assets / "download_asset.py").write_text("# owned transfer helper fixture\n")
     installer = (ROOT / "install.sh").read_text()
@@ -72,6 +75,7 @@ def installer_fixture(tmp_path, *, corrupt_wheel=False):
         ("FULL_LOCK_SHA256", "full-requirements.txt"),
         ("GITLEAKS_SCRIPT_SHA256", "provision_gitleaks.py"),
         ("SHFMT_SCRIPT_SHA256", "provision_shfmt.py"),
+        ("PHPSTAN_SCRIPT_SHA256", "provision_phpstan.py"),
         ("DOWNLOAD_SCRIPT_SHA256", "download_asset.py"),
     ):
         installer = re.sub(
@@ -107,7 +111,7 @@ elif a[:2] == ['tool','install']:
     p=pathlib.Path(os.environ['UV_TOOL_DIR'])/'diff-gremlin'/'bin'; p.mkdir(parents=True)
     (p/'python').symlink_to(sys.executable)
     b=pathlib.Path(os.environ['UV_TOOL_BIN_DIR']); b.mkdir()
-    entry=b/'diff-gremlin'; entry.write_text('#!/bin/sh\\necho "diff-gremlin 1.0.3"\\n'); entry.chmod(0o755)
+    entry=b/'diff-gremlin'; entry.write_text('#!/bin/sh\\necho "diff-gremlin 1.1.0"\\n'); entry.chmod(0o755)
 elif a[:2] == ['tool','dir']:
     print(os.environ['UV_TOOL_BIN_DIR'] if '--bin' in a else os.environ['UV_TOOL_DIR'])
 elif a[:2] == ['pip','install']:
@@ -142,7 +146,13 @@ def test_corrupt_download_never_installs_tool(tmp_path):
 
 
 @pytest.mark.parametrize(
-    "helper", ["provision_gitleaks.py", "provision_shfmt.py", "download_asset.py"]
+    "helper",
+    [
+        "provision_gitleaks.py",
+        "provision_shfmt.py",
+        "provision_phpstan.py",
+        "download_asset.py",
+    ],
 )
 def test_corrupt_provisioner_never_executes_or_installs_tool(tmp_path, helper):
     script, env, tool, trace = installer_fixture(tmp_path)
@@ -208,17 +218,17 @@ def test_gitleaks_archive_links_are_rejected():
 
 def wheel_fixture(tmp_path, *, missing_asset=False):
     release = load_script("prepare_release")
-    wheel = tmp_path / "diff_gremlin-1.0.3-py3-none-any.whl"
+    wheel = tmp_path / "diff_gremlin-1.1.0-py3-none-any.whl"
     with zipfile.ZipFile(wheel, "w") as archive:
         archive.writestr(
-            "diff_gremlin-1.0.3.dist-info/METADATA",
-            "Name: diff-gremlin\nVersion: 1.0.3\n",
+            "diff_gremlin-1.1.0.dist-info/METADATA",
+            "Name: diff-gremlin\nVersion: 1.1.0\n",
         )
         archive.writestr(
-            "diff_gremlin-1.0.3.dist-info/entry_points.txt",
+            "diff_gremlin-1.1.0.dist-info/entry_points.txt",
             "[console_scripts]\ndiff-gremlin = diff_gremlin.cli.main:main\n",
         )
-        archive.writestr("diff_gremlin-1.0.3.dist-info/licenses/LICENSE", "MIT fixture")
+        archive.writestr("diff_gremlin-1.1.0.dist-info/licenses/LICENSE", "MIT fixture")
         for name in release.ASSETS[:-1] if missing_asset else release.ASSETS:
             archive.writestr(name, "controlled nonempty asset")
     return release, wheel
@@ -257,6 +267,7 @@ def test_release_staging_freezes_wheel_hash_without_changing_wheel(tmp_path):
     [
         "diff_gremlin/analyzers/javascript/assets/complexity.cjs",
         "diff_gremlin/analyzers/javascript/assets/duplication.cjs",
+        "diff_gremlin/analyzers/php/assets/tokens.php",
         "diff_gremlin/analyzers/shell/assets/schema.json",
         "diff_gremlin/analyzers/shell/assets/operators.json",
         "diff_gremlin/analyzers/shell/assets/SHFMT-LICENSE",

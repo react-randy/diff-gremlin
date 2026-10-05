@@ -13,13 +13,13 @@ available for development.
 ## Curl installer
 
 ```sh
-curl -fsSL https://github.com/react-randy/diff-gremlin/releases/download/v1.0.3/install.sh | sh
+curl -fsSL https://github.com/react-randy/diff-gremlin/releases/download/v1.1.0/install.sh | sh
 ```
 
 For inspection before execution, download the same pinned release file:
 
 ```sh
-curl -fsSLO https://github.com/react-randy/diff-gremlin/releases/download/v1.0.3/install.sh
+curl -fsSLO https://github.com/react-randy/diff-gremlin/releases/download/v1.1.0/install.sh
 less install.sh
 sh install.sh
 ```
@@ -69,9 +69,9 @@ Docker targets Linux amd64/arm64 and supplies a compatible glibc runtime.
 ## Docker
 
 ```sh
-docker run --rm ghcr.io/react-randy/diff-gremlin:1.0.3 doctor
-docker run --rm ghcr.io/react-randy/diff-gremlin:1.0.3 check https://github.com/OWNER/REPO
-docker run --rm ghcr.io/react-randy/diff-gremlin:1.0.3 pr https://github.com/OWNER/REPO/pull/123
+docker run --rm ghcr.io/react-randy/diff-gremlin:1.1.0 doctor
+docker run --rm ghcr.io/react-randy/diff-gremlin:1.1.0 check https://github.com/OWNER/REPO
+docker run --rm ghcr.io/react-randy/diff-gremlin:1.1.0 pr https://github.com/OWNER/REPO/pull/123
 ```
 
 The image runs as UID/GID 10001. It includes the pinned Python, Node, JDK 25, and
@@ -85,7 +85,7 @@ For a local repo, including paths with spaces:
 docker run --rm --read-only --cap-drop=ALL --security-opt=no-new-privileges \
   --network=none --tmpfs /tmp:rw,nosuid,nodev,size=1g \
   --mount "type=bind,src=$PWD,dst=/workspace,readonly" \
-  ghcr.io/react-randy/diff-gremlin:1.0.3 check /workspace --format json
+  ghcr.io/react-randy/diff-gremlin:1.1.0 check /workspace --format json
 ```
 
 The non-root account must be able to read the mounted files. If the repository
@@ -100,7 +100,7 @@ This exact release URI avoids assuming a public package registry entry:
 
 ```sh
 uvx --no-build --exclude-newer 2026-09-24 \
-  --from 'https://github.com/react-randy/diff-gremlin/releases/download/v1.0.3/diff_gremlin-1.0.3-py3-none-any.whl' \
+  --from 'https://github.com/react-randy/diff-gremlin/releases/download/v1.1.0/diff_gremlin-1.1.0-py3-none-any.whl' \
   diff-gremlin check . --profile quick
 ```
 
@@ -150,3 +150,13 @@ entry points (`diff-gremlin` and `vibe-check`). Remove only the installer-owned
 Python and other uv caches may be shared by your other tools; use uv's own management
 commands to inspect them before removal. Source checkouts and Docker images are
 separate installations.
+
+## PHP tools
+
+The curl installer verifies and installs PHPStan 2.2.15 alongside the tool's Python
+executable. It does not install or configure PHP globally. PHP checks need a trusted
+PHP CLI with tokenizer and PHAR enabled with `-n`, without php.ini. Docker supplies
+PHP 8.4.26 and both extensions for Linux amd64/arm64. For a separately trusted distro
+PHP, the development wrapper procedure is in [Development](development.md).
+Run `diff-gremlin doctor` to inspect executable discovery; actual scans validate
+runtime outputs and report unsupported/missing extensions as evidence gaps.

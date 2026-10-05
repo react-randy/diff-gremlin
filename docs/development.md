@@ -23,6 +23,8 @@ For reviewed cross-language analyzer dependencies:
 npm --prefix toolchain/node ci --ignore-scripts --no-audit --no-fund
 uv run python scripts/provision_gitleaks.py .venv/bin
 uv run python scripts/provision_shfmt.py .venv/bin
+python3 scripts/prepare_php_cli.py "$(command -v php)" .venv/bin/php
+uv run python -I scripts/provision_phpstan.py .venv/bin
 export DIFF_GREMLIN_TOOL_PATH="$PWD/toolchain/node/node_modules/.bin:$(dirname "$(command -v node)"):$JAVA_HOME/bin"
 uv run diff-gremlin doctor
 ```
@@ -52,11 +54,11 @@ For real container validation:
 
 ```sh
 docker build --tag diff-gremlin:ci .
-python3 scripts/verify_docker.py diff-gremlin:ci
+python3 -m scripts.verify_docker diff-gremlin:ci
 ```
 
 The Docker check exercises help, all discovered tool executables, and actual
-Python/TypeScript/Java/Shell/secrets adapters against a trusted mixed-language control
+Python/TypeScript/Java/PHP/Shell/secrets adapters against a trusted mixed-language control
 with a space in its mount path. It requires read-only mounts and verifies unchanged
 source bytes. It never runs the control's npm/Gradle wrapper. The GitHub workflow
 runs native amd64 and arm64 Docker jobs; a checked-in workflow is not itself a
@@ -77,24 +79,24 @@ verifies shipped analyzer assets, and freezes the resulting wheel bytes. Run:
 
 ```sh
 uv build --wheel --require-hashes --build-constraints toolchain/python/build-requirements.txt
-python3 scripts/prepare_release.py dist/diff_gremlin-1.0.3-py3-none-any.whl
+python3 scripts/prepare_release.py dist/diff_gremlin-1.1.0-py3-none-any.whl
 ```
 
 The preparation script verifies package identity/required assets, fills the
 installer's fixed wheel SHA, and stages only public release assets under
-`dist/release/`. It never publishes. Upload that directory to the owned v1.0.3
+`dist/release/`. It never publishes. Upload that directory to the owned v1.1.0
 GitHub release only after full CI, independent review, installer end-to-end tests,
 and platform claims match the evidence. The release has these assets:
 
-- `diff_gremlin-1.0.3-py3-none-any.whl`
+- `diff_gremlin-1.1.0-py3-none-any.whl`
 - `install.sh`
 - `core-requirements.txt`, `full-requirements.txt`
 - `provision_gitleaks.py`
-- `provision_shfmt.py`, `download_asset.py`
+- `provision_shfmt.py`, `provision_phpstan.py`, `download_asset.py`
 - `SHA256SUMS`
 
 Publish the separately validated full image as
-`ghcr.io/react-randy/diff-gremlin:1.0.3`, retaining its immutable digest in the release
+`ghcr.io/react-randy/diff-gremlin:1.1.0`, retaining its immutable digest in the release
 record. Preserve both Linux architectures only after their native tests pass.
 The publication workflow runs release helpers as modules from the trusted checkout
 root (`python3 -m scripts.image_publication`). It requires the published stable

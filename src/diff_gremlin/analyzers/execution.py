@@ -42,6 +42,8 @@ def _unsupported(ctx):
         "typescript",
         "java",
         "shell",
+        "php",
+        "php-blade",
         "",
         "unknown",
         "text",

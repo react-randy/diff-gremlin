@@ -125,7 +125,7 @@ URL access explicitly, supply an already-exported token without writing its valu
 in the command:
 
 ```sh
-docker run --rm -e GH_TOKEN ghcr.io/react-randy/diff-gremlin:1.0.3 \
+docker run --rm -e GH_TOKEN ghcr.io/react-randy/diff-gremlin:1.1.0 \
   pr https://github.com/OWNER/PRIVATE_REPO/pull/123
 ```
 

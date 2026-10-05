@@ -61,6 +61,20 @@ def write_control(root: Path) -> None:
             "  return {count, total, mean};\n"
             "}\n"
         ),
+        "example.php": (
+            "<?php\nfunction phpSummary(int $left, int $right): int {\n"
+            "    $total = $left + $right;\n"
+            "    $scaled = $total * 2;\n"
+            "    $adjusted = $scaled - $left;\n"
+            "    $answer = $adjusted + $right;\n"
+            "    return $answer;\n}\n"
+            "file_put_contents(__DIR__ . '/SHOULD_NOT_RUN', 'target executed');\n"
+        ),
+        "tests/Pest.php": "<?php it('example', function () { if (true) { return; } });\n",
+        "vendor/autoload.php": "<?php file_put_contents(__DIR__ . '/../SHOULD_NOT_RUN', 'autoload');\n",
+        "php.ini": "auto_prepend_file=vendor/autoload.php\n",
+        "phpstan.neon": "parameters:\n    bootstrapFiles:\n        - vendor/autoload.php\n",
+        "composer.json": '{"autoload":{"files":["vendor/autoload.php"]}}\n',
         "Example.java": "public class Example { public static int add(int a, int b) { return a + b; } }\n",
         "tests/test_example.py": "def test_control():\n    assert 1 + 1 == 2\n",
         "package.json": '{"scripts":{"postinstall":"touch SHOULD_NOT_RUN"}}\n',
@@ -78,10 +92,15 @@ def write_control(root: Path) -> None:
     root.chmod(0o755)
 
 
-def checked_stages(data: dict) -> dict:
+def checked_stages(data: dict, *, pinned_php: bool = True) -> dict:
     """Require valid evidence and pinned versions from every bundled adapter."""
     stages = {stage["id"]: stage for stage in data["stages"]}
     expected = (
+        "php.syntax.php",
+        "php.types.phpstan",
+        "complexity.php",
+        "php.duplication.jscpd",
+        "security.php",
         "inventory",
         "hygiene",
         "security.unicode",
@@ -114,7 +133,18 @@ def checked_stages(data: dict) -> dict:
         )
     if data.get("assessment", {}).get("complete") is not True:
         raise ValueError("Docker positive control requires complete selected evidence")
+    check_versions(stages, pinned_php=pinned_php)
+    return {name: stages[name] for name in expected}
+
+
+def check_versions(stages: dict, *, pinned_php: bool) -> None:
+    """Check runtime identity separately from coverage completeness."""
     pinned_versions = {
+        "php.syntax.php": "8.4.26",
+        "security.php": "8.4.26",
+        "php.types.phpstan": "2.2.15",
+        "complexity.php": "1.24.0",
+        "php.duplication.jscpd": "4.2.3",
         "python.lint.ruff": "0.16.8",
         "python.types.pyrefly": "1.3.0",
         "python.health.pyscn": "1.32.1",
@@ -128,6 +158,9 @@ def checked_stages(data: dict) -> dict:
         "security.secrets": "8.30.1",
         "complexity.lizard": "1.24.0",
     }
+    if not pinned_php:
+        pinned_versions.pop("php.syntax.php")
+        pinned_versions.pop("security.php")
     wrong_versions = {
         name: stages[name].get("version")
         for name, version in pinned_versions.items()
@@ -137,7 +170,6 @@ def checked_stages(data: dict) -> dict:
         raise ValueError(
             f"Docker control has unexpected analyzer versions: {wrong_versions}"
         )
-    return {name: stages[name] for name in expected}
 
 
 def check_control(image: str) -> None:
@@ -216,6 +248,21 @@ def check_short_input(image: str) -> None:
         print(json.dumps({"short_input": "limited", "coverage": "0/1", "exit_code": 3}))
 
 
+def check_php_adverse(image: str) -> None:
+    """Require native PHP syntax/type/security defects and short clone limitations."""
+    from scripts.php_delivery_controls import check_cases
+
+    with tempfile.TemporaryDirectory(prefix="diff gremlin php adverse ") as directory:
+        root = Path(directory)
+        write_control(root)
+        check_cases(
+            root,
+            lambda path: invoke(
+                image, ["check", "/workspace", "--format", "json"], path
+            ),
+        )
+
+
 def main() -> int:
     """Validate one locally built image."""
     parser = argparse.ArgumentParser(description=__doc__)
@@ -228,6 +275,7 @@ def main() -> int:
         check_doctor(image)
         check_control(image)
         check_short_input(image)
+        check_php_adverse(image)
     except (ValueError, KeyError, OSError, subprocess.TimeoutExpired) as error:
         parser.exit(1, f"Docker validation failed: {error}\n")
     return 0

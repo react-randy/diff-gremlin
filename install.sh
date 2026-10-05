@@ -2,16 +2,17 @@
 # Install the pinned Diff Gremlin release into a user-local uv tool environment.
 set -eu
 
-VERSION=1.0.3
+VERSION=1.1.0
 UV_VERSION=0.12.18
 PYTHON_VERSION=3.12.12
-RELEASE_URL=https://github.com/react-randy/diff-gremlin/releases/download/v1.0.3
+RELEASE_URL=https://github.com/react-randy/diff-gremlin/releases/download/v1.1.0
 # The release owner fills this after building the final wheel. Never bypass this gate.
 RELEASE_WHEEL_SHA256=REPLACE_WITH_FINAL_RELEASE_WHEEL_SHA256
 CORE_LOCK_SHA256=c20982ad0e9a87d533b0c90333cf121590b2708467aa0f8d5a9a91f6d996be1a
 FULL_LOCK_SHA256=49350b2248a6208b2a156abca7a9305bc5945755d8dc8adf015b1f00572b52bf
 GITLEAKS_SCRIPT_SHA256=04512be352ff4bdeb26167167227422a35243213212d928c54c6c28baedbef44
 SHFMT_SCRIPT_SHA256=4d0aec9eaf38a448eb2810e32c319be288f10be615419a5eb2a71e31f57fdd89
+PHPSTAN_SCRIPT_SHA256=1557ff5c16feaf4aec30352d5a9e25d64f71826b97eef50199f9ac60b3ac3be8
 DOWNLOAD_SCRIPT_SHA256=b5e14f72993de145781df7fb87a8bf871ef2b5702bcc2e8a5b71c756a8e8ca18
 
 fail() {
@@ -109,6 +110,8 @@ fetch_release() {
     verify "$install_temp/provision_gitleaks.py" "$GITLEAKS_SCRIPT_SHA256"
     download "$RELEASE_URL/provision_shfmt.py" "$install_temp/provision_shfmt.py"
     verify "$install_temp/provision_shfmt.py" "$SHFMT_SCRIPT_SHA256"
+    download "$RELEASE_URL/provision_phpstan.py" "$install_temp/provision_phpstan.py"
+    verify "$install_temp/provision_phpstan.py" "$PHPSTAN_SCRIPT_SHA256"
     download "$RELEASE_URL/download_asset.py" "$install_temp/download_asset.py"
     verify "$install_temp/download_asset.py" "$DOWNLOAD_SCRIPT_SHA256"
 }
@@ -134,6 +137,8 @@ install_tool() {
         || fail 'Gitleaks installation failed; Diff Gremlin is installed with incomplete security coverage. Rerun this installer to repair it.'
     "$tool_python" -I "$install_temp/provision_shfmt.py" "$tool_directory/diff-gremlin/bin" \
         || fail 'shfmt installation failed; Diff Gremlin is installed with incomplete Shell coverage. Rerun this installer to repair it.'
+    "$tool_python" -I "$install_temp/provision_phpstan.py" "$tool_directory/diff-gremlin/bin" \
+        || fail 'PHPStan installation failed; PHP type coverage is incomplete. Rerun this installer to repair it.'
 }
 
 show_result() {
@@ -142,7 +147,7 @@ show_result() {
     printf '\nInstalled %s profile. Run: %s/diff-gremlin doctor\n' "$profile" "$bin_directory"
     printf 'If needed, add this directory to PATH: %s\n' "$bin_directory"
     printf 'Uninstall: "%s" tool uninstall diff-gremlin\n' "$uv_command"
-    printf 'For TypeScript/Java and the complete bundled toolchain, use Docker.\n'
+    printf 'PHPStan is installed; PHP CLI with tokenizer/PHAR under -n is also needed. For the complete toolchain, use Docker.\n'
 }
 
 main() {

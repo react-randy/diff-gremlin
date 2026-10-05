@@ -11,22 +11,22 @@ you evidence. No model or API key required. It cannot guess who wrote your code.
 
 ## Install
 
-Install the pinned v1.0.3 release:
+Install the pinned v1.1.0 release:
 
 ```sh
-curl -fsSL https://github.com/react-randy/diff-gremlin/releases/download/v1.0.3/install.sh | sh
+curl -fsSL https://github.com/react-randy/diff-gremlin/releases/download/v1.1.0/install.sh | sh
 diff-gremlin doctor
 ```
 
 The installer verifies the release wheel and dependency hashes, uses an isolated
-uv tool environment, and adds Gitleaks and shfmt. Python full checks include PyScn where its
-platform wheel is available. It does not install Node or Java. See [platform support,
+uv tool environment, and adds Gitleaks, shfmt and PHPStan. Python full checks include PyScn where its
+platform wheel is available. It does not install Node, Java or the PHP CLI. See [platform support,
 manual installation, and uninstall](docs/installation.md).
 
-**Full toolchain, one command:** Python, TypeScript/JavaScript, Java, Shell, and secrets.
+**Full toolchain, one command:** Python, TypeScript/JavaScript, Java, PHP, Shell, and secrets.
 
 ```sh
-docker run --rm ghcr.io/react-randy/diff-gremlin:1.0.3 pr https://github.com/OWNER/REPO/pull/123
+docker run --rm ghcr.io/react-randy/diff-gremlin:1.1.0 pr https://github.com/OWNER/REPO/pull/123
 ```
 
 For local code, mount the repo read-only:
@@ -35,7 +35,7 @@ For local code, mount the repo read-only:
 docker run --rm --read-only --cap-drop=ALL --security-opt=no-new-privileges \
   --network=none --tmpfs /tmp:rw,nosuid,nodev,size=1g \
   --mount "type=bind,src=$PWD,dst=/workspace,readonly" \
-  ghcr.io/react-randy/diff-gremlin:1.0.3 check /workspace
+  ghcr.io/react-randy/diff-gremlin:1.1.0 check /workspace
 ```
 
 ## Review a change
@@ -47,7 +47,7 @@ diff-gremlin compare . main HEAD --format markdown
 ```
 
 PR/MR checks default to **quick**: PyScn health/clones/dead code, maintainability,
-JavaScript clones, and history are visibly omitted. Repo checks default to **full**.
+JavaScript/PHP clones, and history are visibly omitted. Repo checks default to **full**.
 Quick results describe their selected checks. They are not a full assessment.
 Reviews compare exact pinned provider base/head commits; this is not a simulated merge.
 
@@ -72,6 +72,20 @@ then inspect dependencies, tests, and project ownership yourself.
 Start with quick for a first look. Full adds clone searches and history, which
 can take minutes on a large repo. Ordinary binary assets stay outside text
 analysis; omitted possible source and analyzer limits appear in the receipt.
+
+## PHP + React, same receipt
+
+```sh
+docker run --rm ghcr.io/react-randy/diff-gremlin:1.1.0 \
+  pr https://gitlab.com/GROUP/SUPPORT/-/merge_requests/123 --profile full
+```
+
+PHP and frontend checks have separate names, coverage and locations. Quick skips
+clones; full includes them. Missing PHP tools cannot quietly turn into a clean score.
+Laravel vendor symbols can make snapshot types incomplete. Blade templates are
+explicitly unsupported; Composer audit and Laravel framework rules are outside this
+release. No autoloaders, application bootstrap or target PHP are executed.
+[PHP checks and limits →](docs/toolchain.md#php-evidence)
 
 ## Read the verdict
 
@@ -114,7 +128,8 @@ every finding, stage, and scope path. Less scrolling, same gremlin receipts.
 
 Python uses Ruff, Pyrefly, Lizard, Radon, and optional PyScn. JavaScript/TypeScript
 uses ESLint lint and function complexity, TypeScript, and jscpd. Java uses JDK
-parser/type controls and Lizard. Shell uses shfmt for declared dialect syntax,
+parser/type controls and Lizard. PHP uses parser-backed syntax, isolated PHPStan
+snapshot types, Lizard complexity, jscpd clones and contextual security checks. Shell uses shfmt for declared dialect syntax,
 function decisions, and command observations. Gitleaks and contextual source checks provide located security findings;
 repository hygiene and bounded Python Git history add context. Mixed repositories
 retain separate analyzer identities. [Exact tools and limits →](docs/toolchain.md)

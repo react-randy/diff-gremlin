@@ -28,7 +28,7 @@ def native_receipt(tmp_path_factory):
 
 
 def test_native_mixed_language_receipt_passes_delivery_gate(native_receipt):
-    checked = verify_docker.checked_stages(native_receipt)
+    checked = verify_docker.checked_stages(native_receipt, pinned_php=False)
     assert checked["security.execution"]["status"] == "ok"
     assert checked["shell.syntax.shfmt"]["status"] == "ok"
 
@@ -47,14 +47,14 @@ def test_delivery_rejects_missing_or_failed_selected_evidence(
     else:
         next(row for row in receipt["stages"] if row["id"] == stage)["status"] = failure
     with pytest.raises(ValueError, match="invalid bundled analyzer evidence"):
-        verify_docker.checked_stages(receipt)
+        verify_docker.checked_stages(receipt, pinned_php=False)
 
 
 def test_delivery_rejects_incomplete_assessment(native_receipt):
     receipt = copy.deepcopy(native_receipt)
     receipt["assessment"]["complete"] = False
     with pytest.raises(ValueError, match="complete selected evidence"):
-        verify_docker.checked_stages(receipt)
+        verify_docker.checked_stages(receipt, pinned_php=False)
 
 
 @pytest.mark.parametrize("exit_code", [1, 2, 3])

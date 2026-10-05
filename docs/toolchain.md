@@ -1,7 +1,8 @@
 # Reviewed toolchain
 
-Diff Gremlin 1.0.3 uses static analyzers without target installation or builds.
-Pins were reviewed on 2026-10-01, using packages available before 2026-09-24.
+Diff Gremlin 1.1.0 uses static analyzers without target installation or builds.
+Existing pins were reviewed on 2026-10-01. PHP additions were reviewed on
+2026-10-05: PHPStan 2.2.15 (September 23) and PHP 8.4.26 (September 24).
 The package needs no model API or model-specific configuration.
 
 | Surface | Exact tool | Observations and limits |
@@ -15,6 +16,10 @@ The package needs no model API or model-specific configuration.
 | JavaScript/TypeScript lint | ESLint 10.11.0 | Scanner-owned ESLint configuration and trusted parser/plugin packages |
 | TypeScript types | TypeScript 6.0.3 | Controlled compiler host/config; unresolved target dependencies limit evidence |
 | JavaScript/TypeScript clones | jscpd 4.2.3 | Scanner-owned options; full profile only |
+| PHP syntax/security | PHP CLI 8.4.26 in Docker | Native parse/token locations and contextual security observations; target PHP never executed |
+| PHP types | PHPStan 2.2.15 | Source-only snapshot at level 5; missing framework/vendor symbols remain limited |
+| PHP complexity | Lizard 1.24.0 | Separate production function/method evidence; native closure counting limits below |
+| PHP clones | jscpd 4.2.3 | Native PHP tokenizer; same strict windows/receipt checks; full only |
 | Java structure/types | Temurin JDK 25.0.4.1+1 in Docker | Actual JDK parser; standalone `javac -proc:none`, empty dependency paths; missing external classes limit types |
 | Potential secrets | Gitleaks 8.30.1 | Pinned shipped rules, redacted JSON, target suppressions disabled; current inventoried text, not all Git history |
 | Shell syntax/complexity | shfmt 3.14.1 | Declared POSIX sh/dash, Bash and mksh; bounded validated AST; function decision estimate v1 |
@@ -58,7 +63,7 @@ before recognizing `-c`/`+c`; unknown options and script operands stop recogniti
 
 ## Native clone evidence
 
-JavaScript/TypeScript clone checks retain jscpd's five-line/50-token minimum and
+JavaScript/TypeScript and PHP clone checks retain jscpd's five-line/50-token minimum and
 1,000-line/100-KiB file limits. Native tokenizer identities determine which sources
 were observed. Filtered sources remain an evidence gap, even when the tool reports
 zero clones. A five-line source below the token window can have genuine zero clone
@@ -115,6 +120,7 @@ manifests on 2026-10-01:
 | `python:3.12.12-slim-bookworm` | `593bd06efe90efa80dc4eee3948be7c0fde4134606dd40d8dd8dbcade98e669c` |
 | `node:22.23.1-bookworm-slim` | `6c74791e557ce11fc957704f6d4fe134a7bc8d6f5ca4403205b2966bd488f6b3` |
 | `eclipse-temurin:25.0.4.1_1-jdk-noble` | `f6366ccac38ceae180280ad7012d18a15e8031548a430dc2bae06631d9e88ed0` |
+| `php:8.4.26-cli-bookworm` (verified October 5) | `f1d32fb402fffba0b3dd8ba8c0aca474c9e9f04395fa846eedea77c503257dee` |
 | `ghcr.io/astral-sh/uv:0.12.18` | `3adc3706091ce7c2fe595e669628caedd6d951551b92b258b7e7dbe06d9440bc` |
 
 Node [22.23.1](https://github.com/nodejs/node/releases/tag/v22.23.1) was published
@@ -176,8 +182,8 @@ prove the diagnostic's meaning.
 Analyzer discovery uses the installed Python interpreter's directory, system
 executable directories, and explicit absolute `DIFF_GREMLIN_TOOL_PATH` directories.
 It excludes target-local executable directories and generic shell `PATH` additions.
-For Docker, Node `.bin`, the Node binary, JDK tools, Gitleaks and shfmt have fixed trusted
-paths. The curl installer places Gitleaks and shfmt alongside the installed Python tool.
+For Docker, Node `.bin`, the Node binary, JDK tools, Gitleaks, shfmt and PHP have fixed trusted
+paths. The curl installer places Gitleaks, shfmt and PHPStan alongside the installed Python tool.
 
 Analyzer processes receive a clean temporary HOME/config/cache, no provider token,
 and controlled settings. uv provides dependency isolation; it does not provide an
@@ -190,3 +196,50 @@ the old shared 4 MiB cap discarded valid evidence for normal repositories.
 Exhausting the type-specific budget is explicitly limited and supplies no clean
 score. Target imports remain uninstalled and unresolved dependencies remain
 visible even when all diagnostic rows validate.
+
+## PHP evidence
+
+[PHP 8.4.26](https://www.php.net/releases/8_4_26.php) and
+[PHPStan 2.2.15](https://github.com/phpstan/phpstan/releases/tag/2.2.15) are fixed in
+`toolchain/php/manifest.json`, including artifact and license hashes. Docker ships
+PHP's tokenizer and PHAR support compiled in; every invocation uses `-n`, without
+php.ini. The curl installer ships the standalone PHPStan PHAR. Local users supply
+a trusted PHP CLI with tokenizer and PHAR available under `-n`; `doctor` explains
+this requirement. Developers can wrap a trusted distro CLI with
+`scripts/prepare_php_cli.py`, which selects only those native extensions explicitly.
+
+| Stage | Scope |
+| --- | --- |
+| `php.syntax.php` | All inventoried PHP; native parse failures are located findings |
+| `php.types.phpstan` | Production PHP; snapshot level 5, validated per-file completion |
+| `complexity.php` | Production PHP functions/methods; independent from generic Lizard |
+| `php.duplication.jscpd` | Production PHP; full profile only |
+| `security.php` | All inventoried PHP; contextual token rules |
+| `php.templates.blade` | Visible unsupported Blade coverage |
+
+PHPStan receives only copied source files and scanner-owned settings. The exact
+PHAR bytes are verified before use and isolated from its startup autoload probes.
+No Composer installation, vendor autoload, target PHPStan configuration, plugins,
+bootstrap or application execution occurs. Undefined symbols and local type errors
+have located diagnostics. Missing Laravel/vendor symbols make type evidence limited;
+this is dependency resolution uncertainty, not proof the application is broken.
+Relative includes can also be unresolved after snapshot isolation. Missing include
+paths reported by PHPStan are located low-severity coverage warnings, counted separately from unresolved
+symbols and native type defects; they do not produce a synthetic clean type score.
+
+Tests under recognized test directories, `*Test.php` and `Pest.php` are excluded
+from production complexity/clones/types. Parser/security still inspect test source.
+Lizard may fold nested closure decisions into the enclosing method; standalone
+anonymous production closures retain native anonymous identities. It does not
+promise comprehensive PHP AST/function coverage. Pest tests in recognized test files
+do not contribute production complexity or clones.
+
+Security rules observe eval, request-derived unserialize, dynamic shell strings,
+concatenated raw SQL, extract and variable include/require. Comments and plain string
+contents are not calls. Escaped shell arguments, prepared SQL and constrained
+unserialize options have benign controls. These are lexical contextual observations,
+not inter-file taint analysis, runtime reachability or exploitability verdicts.
+Blade, Laravel framework-specific rules and Composer dependency audits are outside
+this capability. Named stages and limits preserve that distinction in mixed PHP/TS
+repository and GitLab MR reports. Product version is 1.1.0; the existing report
+schema and score policy remain 1.1.0 because their structure/thresholds are unchanged.
