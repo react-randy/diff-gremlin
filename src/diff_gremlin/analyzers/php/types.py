@@ -5,7 +5,8 @@ from functools import partial
 from pathlib import Path
 
 from diff_gremlin.analyzers.javascript.installed import trusted_executable
-from diff_gremlin.analyzers.php.type_identity import LEVEL, VERSION
+from diff_gremlin.analyzers.php.type_identity import VERSION
+from diff_gremlin.analyzers.php.type_output import type_metrics
 from diff_gremlin.analyzers.php.type_runtime import TypeInvocationError, native_evidence
 from diff_gremlin.analyzers.php.type_workspace import (
     configuration,
@@ -57,17 +58,10 @@ def analyze_php_types(ctx: ScanContext) -> StageResult:
         "limited" if unresolved else "ok",
         "phpstan",
         VERSION,
-        metrics={
-            "error_count": len(findings) - unresolved,
-            "warning_count": unresolved,
-            "unresolved_symbols": unresolved,
-            "level": LEVEL,
-            "dependency_resolution": "source-only-static-reflection-no-vendor",
-            "target_execution": False,
-        },
+        metrics=type_metrics(findings, unresolved),
         findings=findings,
         reason=(
-            "Snapshot symbols are unresolved; framework/vendor dependencies are not installed"
+            "Snapshot symbols/paths are unresolved; framework/vendor dependencies and original include paths are unavailable"
             if unresolved
             else "Reduced snapshot level 5; no vendor, framework extensions or application bootstrap"
         ),

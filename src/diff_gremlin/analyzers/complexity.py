@@ -172,7 +172,8 @@ def analyze_complexity(ctx: ScanContext) -> StageResult:
     files = tuple(
         file
         for file in ctx.production_files
-        if file.path.suffix.lower() in SUPPORTED_SUFFIXES and file.language != "php"
+        if file.path.suffix.lower() in SUPPORTED_SUFFIXES
+        and file.language not in {"php", "php-blade"}
     )
     return _analyze_complexity(ctx, files, _ID, "Function complexity")
 

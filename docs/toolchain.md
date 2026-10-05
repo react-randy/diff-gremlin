@@ -223,6 +223,9 @@ No Composer installation, vendor autoload, target PHPStan configuration, plugins
 bootstrap or application execution occurs. Undefined symbols and local type errors
 have located diagnostics. Missing Laravel/vendor symbols make type evidence limited;
 this is dependency resolution uncertainty, not proof the application is broken.
+Relative includes can also be unresolved after snapshot isolation. Missing include
+paths reported by PHPStan are located low-severity coverage warnings, counted separately from unresolved
+symbols and native type defects; they do not produce a synthetic clean type score.
 
 Tests under recognized test directories, `*Test.php` and `Pest.php` are excluded
 from production complexity/clones/types. Parser/security still inspect test source.

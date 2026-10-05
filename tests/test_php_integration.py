@@ -165,7 +165,10 @@ def test_native_mixed_php_tsx_compare_attributes_both_files(tmp_path):
 
 
 def test_missing_php_tools_cannot_produce_clean_changed_php(context, monkeypatch):
-    monkeypatch.setenv("DIFF_GREMLIN_TOOL_PATH", "")
+    from diff_gremlin.analyzers.php import tokens, types
+
+    monkeypatch.setattr(tokens, "php_executable", lambda *_: None)
+    monkeypatch.setattr(types, "trusted_executable", lambda *_: None)
     ctx = replace(context([("Service.php", "php", PHP)]), runner=run)
     results = [
         cap.analyze(ctx)
@@ -182,3 +185,21 @@ def test_missing_php_tools_cannot_produce_clean_changed_php(context, monkeypatch
     from diff_gremlin.policy.assessment import assess
 
     assert assess(results).score is None and not assess(results).complete
+
+
+def test_mixed_python_blade_cannot_measure_blade_as_generic_php(context):
+    ctx = context(
+        [
+            ("control.py", "python", "def f():\n    return 1\n"),
+            (
+                "view.blade.php",
+                "php-blade",
+                "<?php function templateHelper() { return 1; } ?>\n",
+            ),
+        ]
+    )
+    stage = analyze_complexity(ctx)
+    assert stage.status == "ok", stage.reason
+    assert (
+        stage.eligible_files == stage.analyzed_files == stage.metrics["functions"] == 1
+    )

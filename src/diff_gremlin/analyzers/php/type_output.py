@@ -4,11 +4,14 @@ import json
 from pathlib import Path
 
 from diff_gremlin.analyzers.javascript.output import natural, positive
+from diff_gremlin.analyzers.php.type_identity import LEVEL
 from diff_gremlin.domain.context import SourceFile
 from diff_gremlin.domain.findings import Finding
 
 UNRESOLVED = frozenset(
     {
+        "require.fileNotFound",
+        "include.fileNotFound",
         "class.notFound",
         "interface.notFound",
         "trait.notFound",
@@ -35,7 +38,7 @@ def diagnostic(item: object, file: SourceFile, lines: int) -> Finding:
         raise TypeError("PHPStan diagnostic schema differs")
     return Finding(
         "phpstan." + identifier,
-        f"PHPStan {identifier} diagnostic (snapshot level 5)",
+        f"PHPStan {identifier} diagnostic (snapshot level {LEVEL})",
         "low" if identifier in UNRESOLVED else "medium",
         file.relative_path,
         line,
@@ -109,3 +112,20 @@ def debug_document(text: str, locations: dict[Path, SourceFile]) -> str:
             "PHPStan debug progress did not cover the exact source inventory"
         )
     return "{" + document
+
+
+def type_metrics(findings: list[Finding], unresolved: int) -> dict:
+    """Separate unavailable include paths from undefined snapshot symbols."""
+    includes = sum(
+        f.rule in {"phpstan.require.fileNotFound", "phpstan.include.fileNotFound"}
+        for f in findings
+    )
+    return {
+        "error_count": len(findings) - unresolved,
+        "warning_count": unresolved,
+        "unresolved_symbols": unresolved - includes,
+        "unresolved_includes": includes,
+        "level": LEVEL,
+        "dependency_resolution": "source-only-static-reflection-no-vendor",
+        "target_execution": False,
+    }

@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 
+from diff_gremlin.analyzers.php.call_arguments import builtin_argument
 from diff_gremlin.analyzers.php.security_context import (
     allowed_unserialize,
     dynamic_shell,
@@ -28,9 +29,10 @@ class CallContext:
 
 
 def _unserialize(call: CallContext) -> list[Finding]:
-    if not call.is_global or not request_context(call.args[0], call.aliases):
+    data = builtin_argument(call.args, 0, "data")
+    if not call.is_global or not request_context(data, call.aliases):
         return []
-    if len(call.args) >= 2 and allowed_unserialize(call.args[1]):
+    if allowed_unserialize(builtin_argument(call.args, 1, "options")):
         return []
     return [
         finding(
@@ -44,7 +46,8 @@ def _unserialize(call: CallContext) -> list[Finding]:
 
 
 def _shell(call: CallContext) -> list[Finding]:
-    if not call.is_global or not dynamic_shell(call.args[0]):
+    command = builtin_argument(call.args, 0, "command")
+    if not call.is_global or not dynamic_shell(command):
         return []
     return [
         finding(
@@ -61,7 +64,9 @@ def _extract(call: CallContext) -> list[Finding]:
     if not call.is_global:
         return []
     severity: Severity = (
-        "high" if request_context(call.args[0], call.aliases) else "medium"
+        "high"
+        if request_context(builtin_argument(call.args, 0, "array"), call.aliases)
+        else "medium"
     )
     return [
         finding(
@@ -117,5 +122,7 @@ def call_findings(
         return []
     is_member = bool(index and tokens[index - 1].text in {"->", "?->", "::"})
     return _dispatch(
-        CallContext(file, token, name, args, global_call(tokens, index), is_member, aliases)
+        CallContext(
+            file, token, name, args, global_call(tokens, index), is_member, aliases
+        )
     )

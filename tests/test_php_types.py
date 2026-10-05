@@ -104,7 +104,9 @@ def test_fake_empty_json_cannot_establish_source_coverage(context, prefix):
 
 
 def test_missing_php_tools_are_a_required_gap(context, monkeypatch):
-    monkeypatch.setenv("DIFF_GREMLIN_TOOL_PATH", "")
+    from diff_gremlin.analyzers.php import types
+
+    monkeypatch.setattr(types, "trusted_executable", lambda *_: None)
     stage = analyze_php_types(context([("a.php", "php", "<?php echo 1;\n")]))
     assert stage.status == "missing" and stage.required and not stage.metrics
 
@@ -128,3 +130,23 @@ def test_invalid_native_location_and_counter_never_clean(context):
         debug_document(
             str(ctx.files[0].path) + "\n" + str(ctx.files[0].path) + "\n{}", locations
         )
+
+
+@pytest.mark.parametrize("operation", ["require", "include"])
+@pytest.mark.parametrize("include_path", ["vendor/autoload.php", "helper.php"])
+def test_native_snapshot_include_paths_are_gaps(context, operation, include_path):
+    sources = [("entry.php", "php", f"<?php {operation} '{include_path}';\n")]
+    if include_path == "helper.php":
+        sources.append(
+            ("helper.php", "php", "<?php function helper(): int { return 1; }\n")
+        )
+    stage = analyze_php_types(context(sources))
+    assert stage.status == "limited", stage.reason
+    assert (
+        stage.metrics["error_count"] == 0 and stage.metrics["unresolved_includes"] == 1
+    )
+    assert stage.metrics["unresolved_symbols"] == 0
+    assert stage_score(stage) is None
+    assert [(f.rule, f.path, f.line, f.severity) for f in stage.findings] == [
+        (f"phpstan.{operation}.fileNotFound", "entry.php", 1, "low")
+    ]
