@@ -1,0 +1,53 @@
+{
+  "verified_on": "2026-10-05",
+  "php": {
+    "version": "8.4.26",
+    "release_date": "2026-09-24",
+    "release_source": "https://www.php.net/releases/index.php?json&version=8.4",
+    "image": "php:8.4.26-cli-bookworm",
+    "index_digest": "sha256:f1d32fb402fffba0b3dd8ba8c0aca474c9e9f04395fa846eedea77c503257dee",
+    "platform_manifests": {
+      "linux/amd64": "sha256:d8938c69019da9954fa09f6d6f06c26e29743cfd11e85543d7d9a7b7867545cc",
+      "linux/arm64": "sha256:fb8101929608e227e6f8f99baf899e80a16573602e398583a22f4225e4e1eb54"
+    },
+    "installed_binary": "/opt/gremlin/php-bin/php",
+    "scanner_arguments": ["-n"],
+    "required_builtins": ["token_get_all", "Phar"],
+    "runtime_libraries": ["libreadline8", "libxml2", "libssl3", "libsqlite3-0", "zlib1g", "libcurl4", "libonig5", "libargon2-1", "libc6"],
+    "runtime_library_source": "toolchain/debian.sources",
+    "license": {
+      "name": "PHP-3.01",
+      "commit": "c31ae58ecbedc7a85dac0eee5a6a88da73543e70",
+      "url": "https://raw.githubusercontent.com/php/php-src/c31ae58ecbedc7a85dac0eee5a6a88da73543e70/LICENSE",
+      "size": 3204,
+      "sha256": "b42e4df5e50e6ecda1047d503d6d91d71032d09ed1027ba1ef29eed26f890c5a",
+      "installed_notice": "/opt/gremlin/bin/PHP-LICENSE"
+    }
+  },
+  "phpstan": {
+    "version": "2.2.15",
+    "release_date": "2026-09-23T12:38:12Z",
+    "release_source": "https://github.com/phpstan/phpstan/releases/tag/2.2.15",
+    "commit": "b158556ffd26825cf615a1c1f72fb5157a2301b7",
+    "url": "https://github.com/phpstan/phpstan/releases/download/2.2.15/phpstan.phar",
+    "size": 29964760,
+    "sha256": "adccacab7cd31a262a5da17478ad5befea6f808afc32cf5f3e8af09702165f90",
+    "installed_phar": "/opt/gremlin/bin/phpstan.phar",
+    "installation": "Hash-verified standalone PHAR; no Composer or downloaded-code execution during provisioning",
+    "scanner_invocation": "Explicit trusted PHP -n with a verified PHAR copied into scanner-owned workspace",
+    "license": {
+      "name": "MIT",
+      "url": "https://raw.githubusercontent.com/phpstan/phpstan/b158556ffd26825cf615a1c1f72fb5157a2301b7/LICENSE",
+      "size": 1105,
+      "sha256": "f9e4f43eb1c32f7c4f5bcdb0860de5ba71712c3c1547eeb0d1e4b3c43313ec81",
+      "installed_notice": "/opt/gremlin/bin/PHPSTAN-LICENSE"
+    }
+  },
+  "download_helper": {
+    "path": "scripts/download_asset.py",
+    "sha256": "b5e14f72993de145781df7fb87a8bf871ef2b5702bcc2e8a5b71c756a8e8ca18",
+    "transfer_deadline_seconds": 60,
+    "protocol": "HTTPS including every redirect"
+  },
+  "validation_boundary": "Official native amd64 CLI verified privately; final amd64 and arm64 Docker build/execution are required delivery gates"
+}

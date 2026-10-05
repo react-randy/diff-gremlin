@@ -6,11 +6,14 @@ RUN npm ci --ignore-scripts --no-audit --no-fund
 
 FROM eclipse-temurin:25.0.4.1_1-jdk-noble@sha256:f6366ccac38ceae180280ad7012d18a15e8031548a430dc2bae06631d9e88ed0 AS jdk
 FROM ghcr.io/astral-sh/uv:0.12.18@sha256:3adc3706091ce7c2fe595e669628caedd6d951551b92b258b7e7dbe06d9440bc AS uv
+# Official PHP multiarch index verified on 2026-10-05; see toolchain/php/manifest.json.
+FROM php:8.4.26-cli-bookworm@sha256:f1d32fb402fffba0b3dd8ba8c0aca474c9e9f04395fa846eedea77c503257dee AS php
 
 FROM python:3.12.12-slim-bookworm@sha256:593bd06efe90efa80dc4eee3948be7c0fde4134606dd40d8dd8dbcade98e669c AS system
 COPY toolchain/debian.sources /etc/apt/sources.list.d/debian.sources
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates git libstdc++6 zlib1g passwd \
+        libreadline8 libxml2 libssl3 libsqlite3-0 libcurl4 libonig5 libargon2-1 \
     && rm -rf /var/lib/apt/lists/*
 
 FROM system AS package
@@ -30,6 +33,8 @@ COPY scripts/provision_gitleaks.py /provision_gitleaks.py
 RUN python -I /provision_gitleaks.py /opt/gremlin/bin
 COPY scripts/provision_shfmt.py /provision_shfmt.py
 RUN python -I /provision_shfmt.py /opt/gremlin/bin
+COPY scripts/provision_phpstan.py /provision_phpstan.py
+RUN python -I /provision_phpstan.py /opt/gremlin/bin
 
 FROM system AS runtime
 LABEL org.opencontainers.image.title="Diff Gremlin" \
@@ -40,10 +45,13 @@ COPY --from=package /opt/gremlin/ /opt/gremlin/
 COPY --from=node-tools /opt/gremlin/node/ /opt/gremlin/node/
 COPY --from=node-tools /usr/local/bin/node /opt/gremlin/node-bin/node
 COPY --from=jdk /opt/java/openjdk /opt/java/openjdk
-ENV PATH="/opt/gremlin/python/bin:/opt/gremlin/node-bin:/opt/java/openjdk/bin:/usr/local/bin:/usr/bin:/bin" \
-    DIFF_GREMLIN_TOOL_PATH="/opt/gremlin/node/node_modules/.bin:/opt/gremlin/node-bin:/opt/java/openjdk/bin:/opt/gremlin/bin" \
+COPY --from=php /usr/local/bin/php /opt/gremlin/php-bin/php
+ENV PATH="/opt/gremlin/python/bin:/opt/gremlin/node-bin:/opt/gremlin/php-bin:/opt/java/openjdk/bin:/usr/local/bin:/usr/bin:/bin" \
+    DIFF_GREMLIN_TOOL_PATH="/opt/gremlin/node/node_modules/.bin:/opt/gremlin/node-bin:/opt/gremlin/php-bin:/opt/java/openjdk/bin:/opt/gremlin/bin" \
     HOME="/tmp" \
     PYTHONDONTWRITEBYTECODE="1"
+RUN /opt/gremlin/php-bin/php -n -r 'exit(PHP_VERSION === "8.4.26" && function_exists("token_get_all") && class_exists("Phar") ? 0 : 1);' \
+    && test "$(/opt/gremlin/php-bin/php -n /opt/gremlin/bin/phpstan.phar --version)" = "PHPStan - PHP Static Analysis Tool 2.2.15"
 RUN /usr/sbin/groupadd --gid 10001 gremlin \
     && /usr/sbin/useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin gremlin \
     && mkdir /workspace
