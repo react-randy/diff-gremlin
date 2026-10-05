@@ -28,36 +28,37 @@ class CallContext:
     aliases: set[str]
 
 
+def _call_observation(
+    call: CallContext, rule: str, message: str, severity: Severity
+) -> list[Finding]:
+    """Construct one redacted call finding through the shared location policy."""
+    return [finding(call.file, call.token, rule, message, severity)]
+
+
 def _unserialize(call: CallContext) -> list[Finding]:
     data = builtin_argument(call.args, 0, "data")
     if not call.is_global or not request_context(data, call.aliases):
         return []
     if allowed_unserialize(builtin_argument(call.args, 1, "options")):
         return []
-    return [
-        finding(
-            call.file,
-            call.token,
-            "request-unserialize",
-            "Request-context data passed to unserialize without a literal allowed_classes=false option; review object creation",
-            "high",
-        )
-    ]
+    return _call_observation(
+        call,
+        "request-unserialize",
+        "Request-context data passed to unserialize without a literal allowed_classes=false option; review object creation",
+        "high",
+    )
 
 
 def _shell(call: CallContext) -> list[Finding]:
     command = builtin_argument(call.args, 0, "command")
     if not call.is_global or not dynamic_shell(command):
         return []
-    return [
-        finding(
-            call.file,
-            call.token,
-            "dynamic-shell",
-            "Dynamic shell command; verify argument escaping and input provenance",
-            "high",
-        )
-    ]
+    return _call_observation(
+        call,
+        "dynamic-shell",
+        "Dynamic shell command; verify argument escaping and input provenance",
+        "high",
+    )
 
 
 def _extract(call: CallContext) -> list[Finding]:
@@ -68,15 +69,12 @@ def _extract(call: CallContext) -> list[Finding]:
         if request_context(builtin_argument(call.args, 0, "array"), call.aliases)
         else "medium"
     )
-    return [
-        finding(
-            call.file,
-            call.token,
-            "extract",
-            "extract imports array keys into local variables; review key provenance and overwrite flags",
-            severity,
-        )
-    ]
+    return _call_observation(
+        call,
+        "extract",
+        "extract imports array keys into local variables; review key provenance and overwrite flags",
+        severity,
+    )
 
 
 def _sql(call: CallContext) -> list[Finding]:
@@ -87,15 +85,12 @@ def _sql(call: CallContext) -> list[Finding]:
         return []
     if not any(part.kind == "T_VARIABLE" for part in expression):
         return []
-    return [
-        finding(
-            call.file,
-            call.token,
-            "concatenated-sql",
-            "Concatenated dynamic raw query expression; review parameter binding",
-            "medium",
-        )
-    ]
+    return _call_observation(
+        call,
+        "concatenated-sql",
+        "Concatenated dynamic raw query expression; review parameter binding",
+        "medium",
+    )
 
 
 def _dispatch(call: CallContext) -> list[Finding]:
