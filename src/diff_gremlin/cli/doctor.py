@@ -21,6 +21,8 @@ def document() -> dict:
         "jscpd",
         "java",
         "javac",
+        "php",
+        "phpstan.phar",
     )
     return {
         "tools": {
@@ -30,6 +32,8 @@ def document() -> dict:
         "guidance": [
             "Use the full Docker image for the bundled cross-language toolchain.",
             "Local Python full analysis also needs the optional PyScn platform wheel.",
+            "PHP uses a trusted CLI tokenizer and the verified standalone PHPStan 2.2.15 PHAR at snapshot level 5; no Composer or Laravel bootstrap.",
+            "PHP CLI must expose tokenizer and PHAR with -n (no php.ini); the full Docker image supplies both.",
             "No tools or target dependencies are installed during scanning.",
         ],
     }

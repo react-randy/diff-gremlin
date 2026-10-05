@@ -115,16 +115,13 @@ def _result_status(status: StageStatus, reason: str, is_limited: bool) -> StageS
     return "limited" if is_limited else "ok"
 
 
-def analyze_complexity(ctx: ScanContext) -> StageResult:
-    files = tuple(
-        file
-        for file in ctx.production_files
-        if file.path.suffix.lower() in SUPPORTED_SUFFIXES
-    )
+def _analyze_complexity(
+    ctx: ScanContext, files: tuple[SourceFile, ...], stage_id: str, label: str
+) -> StageResult:
     failure = partial(
         unavailable,
-        _ID,
-        "Function complexity",
+        stage_id,
+        label,
         "complexity",
         "lizard",
         eligible_files=len(files),
@@ -147,8 +144,8 @@ def analyze_complexity(ctx: ScanContext) -> StageResult:
         functions, is_limited or bool(evidence.reason)
     )
     return StageResult(
-        _ID,
-        "Function complexity",
+        stage_id,
+        label,
         "complexity",
         _result_status(evidence.status, evidence.reason, is_limited),
         "lizard",
@@ -168,3 +165,34 @@ def analyze_complexity(ctx: ScanContext) -> StageResult:
         eligible_files=len(files),
         duration_seconds=time.monotonic() - started,
     )
+
+
+def analyze_complexity(ctx: ScanContext) -> StageResult:
+    """Measure non-PHP production files through the common validated Lizard adapter."""
+    files = tuple(
+        file
+        for file in ctx.production_files
+        if file.path.suffix.lower() in SUPPORTED_SUFFIXES and file.language != "php"
+    )
+    return _analyze_complexity(ctx, files, _ID, "Function complexity")
+
+
+def analyze_php_complexity(ctx: ScanContext) -> StageResult:
+    """Keep PHP function evidence distinct and avoid measuring it twice."""
+    files = tuple(file for file in ctx.production_files if file.language == "php")
+    if not files:
+        return unavailable(
+            "complexity.php",
+            "PHP function complexity",
+            "complexity",
+            "lizard",
+            "No production PHP files",
+            status="skipped",
+            required=False,
+        )
+    result = _analyze_complexity(
+        ctx, files, "complexity.php", "PHP function complexity"
+    )
+    if not result.reason:
+        result.reason = "Lizard PHP function/method observations; nested closures can be included in their enclosing method; test paths and Pest.php are excluded"
+    return result

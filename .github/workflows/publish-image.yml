@@ -6,10 +6,10 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Published stable release tag (v1.0.3)
+        description: Published stable release tag (v1.1.0)
         required: true
         type: string
-        default: v1.0.3
+        default: v1.1.0
 
 # Serialize this repository's version-tag writers, including re-runs.
 concurrency:
@@ -28,9 +28,9 @@ jobs:
     if: >-
       github.repository == 'react-randy/diff-gremlin' &&
       github.repository_id == '1400500531' &&
-      ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.tag == 'v1.0.3') ||
+      ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.tag == 'v1.1.0') ||
        (github.event_name == 'release' && github.event.action == 'published' &&
-        github.ref == 'refs/tags/v1.0.3' && github.event.release.tag_name == 'v1.0.3' &&
+        github.ref == 'refs/tags/v1.1.0' && github.event.release.tag_name == 'v1.1.0' &&
         !github.event.release.draft && !github.event.release.prerelease))
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -78,10 +78,10 @@ jobs:
           docker build --platform "linux/$ARCHITECTURE" --tag diff-gremlin:publication \
             --label "org.opencontainers.image.source=https://github.com/react-randy/diff-gremlin" \
             --label "org.opencontainers.image.revision=$SOURCE_SHA" \
-            --label "org.opencontainers.image.version=1.0.3" .
+            --label "org.opencontainers.image.version=1.1.0" .
           test "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' diff-gremlin:publication)" = "linux/$ARCHITECTURE"
       - name: Exercise the shipped Docker controls before registry authentication
-        run: python3 scripts/verify_docker.py diff-gremlin:publication
+        run: python3 -m scripts.verify_docker diff-gremlin:publication
       - name: Authenticate to GHCR using an isolated Docker config
         env:
           GHCR_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
@@ -158,16 +158,16 @@ jobs:
           python3 -m scripts.image_publication guard --sha "$SOURCE_SHA" --release-id "$RELEASE_ID"
           python3 -m scripts.image_publication absent --docker-config "$DOCKER_CONFIG"
           mapfile -t sources < "$RUNNER_TEMP/image-sources"
-          docker buildx imagetools create --tag "$IMAGE:1.0.3" "${sources[@]}"
-          docker buildx imagetools inspect --raw "$IMAGE:1.0.3" | \
+          docker buildx imagetools create --tag "$IMAGE:1.1.0" "${sources[@]}"
+          docker buildx imagetools inspect --raw "$IMAGE:1.1.0" | \
             python3 -m scripts.image_publication index --sha "$SOURCE_SHA" \
               --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" \
               --receipts "$RUNNER_TEMP/receipts"
-          docker buildx imagetools inspect "$IMAGE:1.0.3"
+          docker buildx imagetools inspect "$IMAGE:1.1.0"
       - name: Record public-visibility handoff
         run: |
           cat >> "$GITHUB_STEP_SUMMARY" <<'SUMMARY'
-          Published the verified amd64/arm64 index as `ghcr.io/react-randy/diff-gremlin:1.0.3`.
+          Published the verified amd64/arm64 index as `ghcr.io/react-randy/diff-gremlin:1.1.0`.
 
           GHCR makes new packages private. The package owner must set this package's visibility to public, then verify anonymous pulls and the index digest before advertising the Docker command.
           SUMMARY

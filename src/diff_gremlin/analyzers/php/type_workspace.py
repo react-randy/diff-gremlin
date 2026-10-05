@@ -2,7 +2,6 @@
 
 import hashlib
 import json
-import shutil
 from pathlib import Path
 
 from diff_gremlin.analyzers.php.type_identity import BYTES, LEVEL, SHA256
@@ -32,7 +31,11 @@ def source_view(
         path = root / f"{index}.php"
         if file.path.stat().st_size != file.size_bytes:
             raise ValueError("PHP source size differs from captured inventory")
-        shutil.copyfile(file.path, path)
+        with file.path.open("rb") as stream:
+            data = stream.read(file.size_bytes + 1)
+        if len(data) != file.size_bytes:
+            raise ValueError("PHP source read size differs from captured inventory")
+        path.write_bytes(data)
         if path.stat().st_size != file.size_bytes:
             raise ValueError("PHP copied source size differs from captured inventory")
         locations[path] = file

@@ -67,6 +67,7 @@ def is_test_path(path: Path) -> bool:
             part.lower() in {"test", "tests", "__tests__", "spec", "specs"}
             for part in path.parts
         )
+        or (path.suffix.lower() == ".php" and stem.lower() == "pest")
         or stem.lower() == "test"
         or stem.lower().startswith("test_")
         or stem.lower().endswith(("_test", ".test", ".spec", "_spec"))
@@ -139,7 +140,11 @@ def inventory_file(state: InventoryState, child, relative: Path, size: int) -> N
         SourceFile(
             Path(child.path),
             relative.as_posix(),
-            LANGUAGES.get(relative.suffix.lower(), ""),
+            (
+                "php-blade"
+                if relative.name.lower().endswith(".blade.php")
+                else LANGUAGES.get(relative.suffix.lower(), "")
+            ),
             is_test_path(relative),
             size,
             classification,

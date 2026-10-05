@@ -9,9 +9,10 @@ from email.parser import BytesParser
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-VERSION = "1.0.3"
+VERSION = "1.1.0"
 ASSETS = (
     "diff_gremlin/analyzers/java/assets/StructureProbe.java",
+    "diff_gremlin/analyzers/php/assets/tokens.php",
     "diff_gremlin/analyzers/javascript/assets/lint.cjs",
     "diff_gremlin/analyzers/javascript/assets/complexity.cjs",
     "diff_gremlin/analyzers/javascript/assets/types.cjs",
@@ -62,6 +63,7 @@ def finalized_installer(wheel: Path) -> str:
         "FULL_LOCK_SHA256": ROOT / "toolchain/python/full-requirements.txt",
         "GITLEAKS_SCRIPT_SHA256": ROOT / "scripts/provision_gitleaks.py",
         "SHFMT_SCRIPT_SHA256": ROOT / "scripts/provision_shfmt.py",
+        "PHPSTAN_SCRIPT_SHA256": ROOT / "scripts/provision_phpstan.py",
         "DOWNLOAD_SCRIPT_SHA256": ROOT / "scripts/download_asset.py",
     }
     for name, path in pins.items():
@@ -87,6 +89,7 @@ def stage_release(wheel: Path, destination: Path) -> None:
         ROOT / "toolchain/python/full-requirements.txt",
         ROOT / "scripts/provision_gitleaks.py",
         ROOT / "scripts/provision_shfmt.py",
+        ROOT / "scripts/provision_phpstan.py",
         ROOT / "scripts/download_asset.py",
     ):
         shutil.copyfile(source, destination / source.name)

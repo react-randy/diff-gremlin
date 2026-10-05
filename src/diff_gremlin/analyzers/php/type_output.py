@@ -23,7 +23,7 @@ UNRESOLVED = frozenset(
 def diagnostic(item: object, file: SourceFile, lines: int) -> Finding:
     """Keep source fragments private while returning the native rule and location."""
     if not isinstance(item, dict):
-        raise ValueError("PHPStan diagnostic is not an object")
+        raise TypeError("PHPStan diagnostic is not an object")
     line, identifier = item.get("line"), item.get("identifier")
     if not positive(line) or line > lines:
         raise ValueError("PHPStan diagnostic location is outside copied source")
@@ -32,7 +32,7 @@ def diagnostic(item: object, file: SourceFile, lines: int) -> Finding:
     if not isinstance(item.get("message"), str) or not isinstance(
         item.get("ignorable"), bool
     ):
-        raise ValueError("PHPStan diagnostic schema differs")
+        raise TypeError("PHPStan diagnostic schema differs")
     return Finding(
         "phpstan." + identifier,
         f"PHPStan {identifier} diagnostic (snapshot level 5)",
@@ -45,10 +45,10 @@ def diagnostic(item: object, file: SourceFile, lines: int) -> Finding:
 def _output_rows(text: str) -> tuple[dict, dict]:
     data = json.loads(text)
     if not isinstance(data, dict) or not isinstance(data.get("totals"), dict):
-        raise ValueError("PHPStan output has no totals")
+        raise TypeError("PHPStan output has no totals")
     totals, rows, errors = data["totals"], data.get("files"), data.get("errors")
     if not isinstance(rows, dict) or not isinstance(errors, list):
-        raise ValueError("PHPStan output has no file diagnostics or global errors")
+        raise TypeError("PHPStan output has no file diagnostics or global errors")
     if errors or totals.get("errors") != 0 or not natural(totals.get("file_errors")):
         raise ValueError("PHPStan reported global analysis failures")
     return totals, rows
@@ -56,7 +56,7 @@ def _output_rows(text: str) -> tuple[dict, dict]:
 
 def _messages(value: object) -> list:
     if not isinstance(value, dict) or not isinstance(value.get("messages"), list):
-        raise ValueError("PHPStan file diagnostic schema differs")
+        raise TypeError("PHPStan file diagnostic schema differs")
     if not natural(value.get("errors")) or value["errors"] != len(value["messages"]):
         raise ValueError("PHPStan file counters disagree")
     return value["messages"]

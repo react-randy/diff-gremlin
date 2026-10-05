@@ -6,4 +6,7 @@ from diff_gremlin.domain.stages import StageResult
 
 
 def analyze_php_duplication(ctx: ScanContext) -> StageResult:
-    return analyze_duplication(ctx, PHP)
+    stage = analyze_duplication(ctx, PHP)
+    if stage.eligible_files == 0:
+        stage.required = False
+    return stage

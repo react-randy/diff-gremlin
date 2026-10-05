@@ -35,7 +35,7 @@ def registry_token(config: Path) -> str:
 
 def validate_absence(status: int, body: dict) -> None:
     """Only a registry's explicit authenticated missing-manifest response means absent."""
-    require(status != 200, "Refusing to overwrite existing image version 1.0.3")
+    require(status != 200, "Refusing to overwrite existing image version 1.1.0")
     require(
         status == 404, f"GHCR version lookup failed (HTTP {status}); absence unproven"
     )

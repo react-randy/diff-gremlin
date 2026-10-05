@@ -27,7 +27,7 @@ def _token_row(item: object) -> tuple[str, bytes]:
 
 def _tokens(values: object, source: bytes) -> tuple[PHPToken, ...]:
     if not isinstance(values, list):
-        raise ValueError("invalid token inventory")
+        raise TypeError("invalid token inventory")
     result = []
     starts = line_starts(source)
     offset = 0

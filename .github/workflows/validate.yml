@@ -32,6 +32,10 @@ jobs:
         run: uv run --no-sync python scripts/provision_gitleaks.py .venv/bin
       - name: Install verified shfmt into the private tool environment
         run: uv run --no-sync python scripts/provision_shfmt.py .venv/bin
+      - name: Prepare trusted PHP with explicit extensions and no php.ini
+        run: |
+          python3 scripts/prepare_php_cli.py "$(command -v php)" .venv/bin/php
+          uv run --no-sync python -I scripts/provision_phpstan.py .venv/bin
       - name: Check source and tests
         env:
           PYTHONPATH: src
@@ -44,7 +48,7 @@ jobs:
       - name: Build package with verified backend
         run: uv build --wheel --require-hashes --build-constraints toolchain/python/build-requirements.txt
       - name: Verify shipped assets and stage release preview
-        run: python3 scripts/prepare_release.py dist/diff_gremlin-1.0.3-py3-none-any.whl --out "$RUNNER_TEMP/release"
+        run: python3 scripts/prepare_release.py dist/diff_gremlin-1.1.0-py3-none-any.whl --out "$RUNNER_TEMP/release"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: diff-gremlin-release-preview
@@ -63,4 +67,4 @@ jobs:
       - name: Build complete image
         run: docker build --tag diff-gremlin:ci .
       - name: Exercise installed analyzers with a read-only source mount
-        run: python3 scripts/verify_docker.py diff-gremlin:ci
+        run: python3 -m scripts.verify_docker diff-gremlin:ci

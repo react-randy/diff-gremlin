@@ -6,17 +6,15 @@ from pathlib import Path
 
 from diff_gremlin.analyzers.javascript.installed import trusted_executable
 from diff_gremlin.analyzers.php.type_identity import LEVEL, VERSION
-from diff_gremlin.analyzers.php.type_output import debug_document, diagnostics
+from diff_gremlin.analyzers.php.type_runtime import TypeInvocationError, native_evidence
 from diff_gremlin.analyzers.php.type_workspace import (
     configuration,
     isolated_phar,
     source_view,
 )
-from diff_gremlin.analyzers.status import execution_status, unavailable
+from diff_gremlin.analyzers.status import unavailable
 from diff_gremlin.domain.context import ScanContext
 from diff_gremlin.domain.stages import StageResult
-
-MAX_OUTPUT = 64 * 1024 * 1024
 
 
 def analyze_php_types(ctx: ScanContext) -> StageResult:
@@ -45,33 +43,11 @@ def analyze_php_types(ctx: ScanContext) -> StageResult:
             tool = isolated_phar(Path(phar), workspace)
             locations = source_view(files, workspace)
             config = configuration(workspace, tuple(locations))
-            result = ctx.run(
-                [
-                    php,
-                    "-n",
-                    str(tool),
-                    "analyse",
-                    "--configuration",
-                    str(config),
-                    "--no-progress",
-                    "--error-format=json",
-                    "--memory-limit=512M",
-                    "--debug",
-                ],
-                cwd=workspace,
-                output_limit=MAX_OUTPUT,
-                data_output=True,
+            result, findings, unresolved = native_evidence(
+                ctx, php, tool, config, workspace, locations
             )
-            status = execution_status(result, (0, 1))
-            if status or result.returncode is None:
-                return absent(
-                    f"Controlled PHPStan invocation {result.status}; exit {result.returncode}",
-                    status=status or "failed",
-                )
-            # Debug prints file names before JSON; remove no arbitrary text. Native
-            # debug mode avoids worker subprocesses that could lose hardened -n.
-            output = debug_document(result.stdout, locations)
-            findings, unresolved = diagnostics(output, locations, result.returncode)
+    except TypeInvocationError as error:
+        return absent(str(error), status=error.status)
     except (OSError, ValueError, TypeError) as error:
         return absent(f"PHPStan evidence rejected: {error}", status="failed")
     return StageResult(
