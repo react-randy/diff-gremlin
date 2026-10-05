@@ -7,16 +7,16 @@ const {Tokenizer, getSupportedFormats} = require(tokenizerPath);
 const {getFilesToDetect, InFilesDetector, JsonReporter} = require(finderPath);
 const limits = {minLines: 5, minTokens: 50, maxLines: 1000, maxSize: '100kb'};
 
-function optionsFor(files) {
+function optionsFor(files, formats) {
   return {...core.getDefaultOptions(), ...limits, path: files,
-    format: ['javascript', 'typescript', 'jsx', 'tsx'], absolute: true, noSymlinks: true,
+    format: formats, absolute: true, noSymlinks: true,
     cache: false, ignore: [], gitignore: false, skipLocal: false, ignoreCase: false,
     ignorePattern: [], formatsExts: {}, formatsNames: {}, reporters: [],
     silent: true, debug: false, verbose: false};
 }
 
 async function observe(request) {
-  const options = optionsFor(request.files);
+  const options = optionsFor(request.files, request.formats);
   const entries = getFilesToDetect(options);
   const detectorFiles = entries.map(entry => entry.path);
   const statistic = new core.Statistic();
@@ -26,7 +26,7 @@ async function observe(request) {
     const clones = await detector.detect(entries);
     const native = new JsonReporter(options).generateJson(clones, statistic.getStatistic());
     return {...native, invocation: request.invocation, options: limits,
-      requested_files: request.files, detector_files: detectorFiles,
+      requested_files: request.files, requested_formats: request.formats, detector_files: detectorFiles,
       tokenizer_formats: getSupportedFormats()};
   } finally {
     store.close();
