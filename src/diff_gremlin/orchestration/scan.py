@@ -65,6 +65,36 @@ def history_stage(snapshot: Snapshot, context: ScanContext) -> StageResult:
     )
 
 
+def record_stages(
+    stages: list[StageResult],
+    results: list[StageResult],
+    progress: Callable[[StageResult], None] | None,
+) -> None:
+    """Publish each completed observation before beginning the next capability."""
+    stages.extend(results)
+    if progress is not None:
+        for result in results:
+            progress(result)
+
+
+def selection_stage(selection: dict | None) -> list[StageResult]:
+    """Keep intentionally excluded repository paths distinct from analyzer gaps."""
+    if selection is None:
+        return []
+    return [
+        StageResult(
+            "scope.selection",
+            "Selected source paths",
+            "structure",
+            "limited",
+            "builtin",
+            metrics=selection,
+            reason="Only selected paths were scanned; repository evidence is partial",
+            scope="selected-paths",
+        )
+    ]
+
+
 def scan(
     snapshot: Snapshot,
     *,
@@ -78,24 +108,9 @@ def scan(
     started = time.monotonic()
     inventory = collect_inventory(snapshot.root, snapshot.scope_manifest)
     selected = capabilities(inventory.languages)
-    stages = [inventory.stage]
+    stages = []
     selection = getattr(snapshot, "selection", None)
-    if selection is not None:
-        stages.append(
-            StageResult(
-                "scope.selection",
-                "Selected source paths",
-                "structure",
-                "limited",
-                "builtin",
-                metrics=selection,
-                reason="Only selected paths were scanned; repository evidence is partial",
-                scope="selected-paths",
-            )
-        )
-    if progress is not None:
-        for stage in stages:
-            progress(stage)
+    record_stages(stages, [inventory.stage, *selection_stage(selection)], progress)
     with tempfile.TemporaryDirectory(prefix="diff-gremlin-analysis-") as directory:
         context = ScanContext(
             snapshot.root,
@@ -111,15 +126,10 @@ def scan(
         for capability in selected:
             if profile == "full" or not capability.full_only:
                 results = invoke(capability, context)
-                stages.extend(results)
-                if progress is not None:
-                    for result in results:
-                        progress(result)
+                record_stages(stages, results, progress)
         if profile == "full":
             history = history_stage(snapshot, context)
-            stages.append(history)
-            if progress is not None:
-                progress(history)
+            record_stages(stages, [history], progress)
     return ScanReport(
         snapshot.identity,
         profile,

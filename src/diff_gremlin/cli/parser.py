@@ -51,12 +51,14 @@ def common_options(parser, *, profile="full", comparison=False):
         "--fail-under",
         type=bounded_number,
         metavar="SCORE",
-        help="exit 1 below SCORE; unknown evidence exits 3",
+        help="exit 1 below SCORE; unknown evidence exits 3"
+        + ("; evaluates the head snapshot" if comparison else ""),
     )
     parser.add_argument(
         "--fail-on",
         choices=("low", "medium", "high", "critical"),
-        help="exit 1 for findings at this severity or above",
+        help="exit 1 for findings at this severity or above"
+        + ("; evaluates the head snapshot" if comparison else ""),
     )
     parser.add_argument(
         "--require-complete",
