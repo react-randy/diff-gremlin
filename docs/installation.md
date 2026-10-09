@@ -140,7 +140,8 @@ SOURCE_REV='FULL_40_CHARACTER_COMMIT_SHA'
 git fetch origin "$SOURCE_REV"
 git checkout --detach "$SOURCE_REV"
 test "$(git rev-parse HEAD)" = "$SOURCE_REV"
-test -z "$(git status --porcelain)"
+SOURCE_WORKTREE_STATE=$(git status --porcelain)
+test -z "$SOURCE_WORKTREE_STATE"
 docker build --label "org.opencontainers.image.revision=$SOURCE_REV" \
   --tag "diff-gremlin:source-$SOURCE_REV" .
 docker image inspect --format '{{.Id}} {{index .Config.Labels "org.opencontainers.image.revision"}}' \
