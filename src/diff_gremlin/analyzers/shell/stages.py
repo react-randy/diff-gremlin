@@ -1,5 +1,7 @@
 """Adapt validated Shell syntax and function decisions to stage evidence."""
 
+import hashlib
+
 from diff_gremlin.analyzers.shell.decisions import MEASURE
 from diff_gremlin.analyzers.shell.parser import Parsed, parse_files
 from diff_gremlin.domain.context import ScanContext, SourceFile
@@ -79,6 +81,14 @@ def hotspot_findings(hotspots: list[dict]) -> list[Finding]:
             row["file"],
             row["line"],
             symbol=row["function"],
+            fingerprint=hashlib.sha256(
+                f"shell.high-complexity\0{row['file']}\0{row['function']}\0{MEASURE}".encode(
+                    "utf-8", "surrogateescape"
+                )
+            ).hexdigest()[:20],
+            metric=MEASURE,
+            value=row["cc"],
+            identity_kind="qualified",
         )
         for row in hotspots
     ]

@@ -1,5 +1,6 @@
 """Measure every JS/TS function code path using native ESLint complexity."""
 
+import hashlib
 from functools import partial
 from pathlib import Path
 
@@ -44,13 +45,25 @@ def _function(row, paths):
         "class-static-block",
     }:
         raise ValueError("invalid complexity code-path origin")
+    if (
+        not isinstance(row.get("symbol"), str)
+        or not row["symbol"]
+        or len(row["symbol"]) > 2048
+        or not isinstance(row.get("identity"), str)
+        or len(row["identity"]) != 64
+        or any(character not in "0123456789abcdef" for character in row["identity"])
+        or row.get("identity_kind") not in {"qualified", "body"}
+    ):
+        raise ValueError("invalid stable function identity")
     line, column, kind = row["line"], row["column"], row["kind"]
     return {
         "file": paths[row["path"]],
         "line": line,
         "column": column,
         "cc": row["cc"],
-        "function": f"{kind}@{line}:{column}",
+        "function": row["symbol"],
+        "identity": row["identity"],
+        "identity_kind": row["identity_kind"],
         "kind": kind,
     }
 
@@ -98,6 +111,14 @@ def _findings(hotspots):
             row["line"],
             row["column"],
             symbol=row["function"],
+            fingerprint=hashlib.sha256(
+                f"eslint.high-complexity\0{row['file']}\0{row['identity']}".encode(
+                    "utf-8", "surrogateescape"
+                )
+            ).hexdigest()[:20],
+            metric="cyclomatic_complexity",
+            value=row["cc"],
+            identity_kind=row["identity_kind"],
         )
         for row in hotspots
     ]

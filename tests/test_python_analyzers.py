@@ -320,7 +320,15 @@ def test_pyscn_clone_metrics_and_locations(tmp_path):
             ],
         }
     ]
-    stage = analyze_pyscn(make_context(tmp_path, FakeRunner(json.dumps(data))))[1]
+    sources = {
+        "a.py": (
+            "def one(x):\n    if x:\n        return x\n\n"
+            "def two(x):\n    if x:\n        return x\n"
+        )
+    }
+    stage = analyze_pyscn(
+        make_context(tmp_path, FakeRunner(json.dumps(data)), sources)
+    )[1]
     assert (
         stage.status == "ok"
         and stage.metrics["duplication_percent"] == 75.5

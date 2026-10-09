@@ -66,3 +66,19 @@ already exit 3 by default. Thresholds cannot turn unknown into a passing number.
 Calibration is tested against independent clean, deliberately bad, mixed-language
 and missing-tool fixtures before evaluating Diff Gremlin itself. Changing this
 policy requires a version change and new published calibration evidence.
+
+## Comparison policy 1.0.0 (unreleased)
+
+The snapshot policy above retains version 1.1.0 and its thresholds. Comparison
+receipts on main add a separate `delta_assessment.policy_version` of 1.0.0. This
+policy asks whether the diff introduced or worsened a blocker, using measured
+function changes and comparable stage metrics. Inherited unchanged blockers remain
+in the snapshots. A worsened function above CC 50 blocks even if the repository's
+maximum is unchanged; unchanged moved functions do not become new observations.
+
+Without explicit gates, a complete comparison with no blocking regression exits
+0, a demonstrated blocking regression exits 1, and incomplete evidence exits 3.
+Unknown evidence cannot confirm resolutions. Explicit `--fail-on` or `--fail-under`
+retain the head snapshot gate behavior. Intentionally selected paths remain
+partial, with a required scope gap and no strict whole-repository score. See
+[comparison usage](usage.md#comparison-verdicts) for receipt and location semantics.

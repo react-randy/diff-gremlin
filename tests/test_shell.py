@@ -186,7 +186,7 @@ def test_nested_functions_get_own_rows_and_top_level_no_row(tmp_path):
     assert stage.status == "ok", stage.reason
     assert stage.metrics["function_rows"] == [
         {"file": "a.sh", "function": "outer", "line": 3, "cc": 2},
-        {"file": "a.sh", "function": "inner", "line": 5, "cc": 2},
+        {"file": "a.sh", "function": "outer.inner", "line": 5, "cc": 2},
     ]
 
 

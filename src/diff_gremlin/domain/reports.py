@@ -16,3 +16,4 @@ class ScanReport:
     assessment: Assessment
     duration_seconds: float
     omitted_stages: tuple[str, ...] = ()
+    source_selection: dict | None = None

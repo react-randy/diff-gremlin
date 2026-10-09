@@ -1,5 +1,6 @@
 """Located observations that readers can investigate."""
 
+import hashlib
 from dataclasses import dataclass
 from typing import Literal
 
@@ -26,3 +27,22 @@ class Finding:
     symbol: str = ""
     fingerprint: str = ""
     confidence: Literal["high", "medium", "low"] = "high"
+    metric: str = ""
+    value: int | float | None = None
+    identity_kind: Literal["observation", "qualified", "body"] = "observation"
+
+
+def observation_identity(
+    rule: str,
+    path: str,
+    symbol: str,
+    message: str,
+    metric: str = "",
+    fingerprint: str = "",
+) -> str:
+    """Keep measurement value, severity and location out of persistent identity."""
+    if fingerprint:
+        return fingerprint
+    detail = metric if metric else message
+    text = f"{rule}\0{path}\0{symbol}\0{detail}"
+    return hashlib.sha256(text.encode("utf-8", "surrogateescape")).hexdigest()[:20]

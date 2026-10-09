@@ -1,12 +1,51 @@
 """Accept located PHPStan diagnostics only from the exact owned source view."""
 
 import json
+import re
 from pathlib import Path
 
 from diff_gremlin.analyzers.javascript.output import natural, positive
 from diff_gremlin.analyzers.php.type_identity import LEVEL
 from diff_gremlin.domain.context import SourceFile
 from diff_gremlin.domain.findings import Finding
+from diff_gremlin.runtime.environment import redact
+
+_CONTEXT = re.compile(
+    r"(.+) \(in context of class ([A-Za-z_][A-Za-z0-9_]*(?:\\[A-Za-z_][A-Za-z0-9_]*)*)\)\Z"
+)
+
+
+def _source_identity(name: object, locations: dict[Path, SourceFile]) -> Path:
+    """Permit the observed trait context suffix only after exact copied-path identity."""
+    if isinstance(name, str):
+        direct = Path(name)
+        if direct in locations:
+            return direct
+        context = _CONTEXT.fullmatch(name)
+        if context and len(context.group(2)) <= 150:
+            path = Path(context.group(1))
+            if path in locations:
+                return path
+        # Name the rejected leaf without publishing temporary/host paths or
+        # untrusted message text. The contextual suffix is descriptive only;
+        # it can never supply another source path.
+        prefix = name.split(" (", 1)[0]
+        owned = locations.get(Path(prefix))
+        label = owned.relative_path if owned else prefix
+        description = (
+            "unsupported context for inventoried source"
+            if owned
+            else "unrecognized source identity"
+        )
+        leaf = label.replace("\\", "/").rsplit("/", 1)[-1]
+        leaf = redact(leaf[:100])
+        leaf = re.sub(r"[A-Za-z0-9_=-]{24,}", "redacted", leaf)
+        leaf = re.sub(r"[^A-Za-z0-9_.-]", "?", leaf)
+        raise ValueError(
+            f"PHPStan reported a foreign source ({description}: {leaf or 'unnamed'})"
+        )
+    raise ValueError("PHPStan reported a foreign source (non-string source identity)")
+
 
 UNRESOLVED = frozenset(
     {
@@ -30,7 +69,13 @@ def diagnostic(item: object, file: SourceFile, lines: int) -> Finding:
     line, identifier = item.get("line"), item.get("identifier")
     if not positive(line) or line > lines:
         raise ValueError("PHPStan diagnostic location is outside copied source")
-    if not isinstance(identifier, str) or not identifier or len(identifier) > 150:
+    if (
+        not isinstance(identifier, str)
+        or len(identifier) > 150
+        or not re.fullmatch(
+            r"[A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z][A-Za-z0-9]*)*", identifier
+        )
+    ):
         raise ValueError("PHPStan diagnostic has no valid rule identifier")
     if not isinstance(item.get("message"), str) or not isinstance(
         item.get("ignorable"), bool
@@ -76,9 +121,7 @@ def _source_lines(path: Path, file: SourceFile) -> int:
 def _source_findings(
     name: object, value: object, locations: dict[Path, SourceFile]
 ) -> list[Finding]:
-    if not isinstance(name, str) or Path(name) not in locations:
-        raise ValueError("PHPStan reported a foreign source")
-    path = Path(name)
+    path = _source_identity(name, locations)
     file = locations[path]
     lines = _source_lines(path, file)
     return [diagnostic(item, file, lines) for item in _messages(value)]

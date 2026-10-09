@@ -30,6 +30,7 @@ class Snapshot:
     identity: SourceIdentity
     history_repo: Path | None = None
     scope_manifest: tuple[SourceScopeEntry, ...] = ()
+    selection: dict | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -53,3 +54,5 @@ class SnapshotPair:
     head: Snapshot
     review: ReviewTarget | None = None
     comparison_base_sha: str = ""
+    base_changed_lines: dict[str, tuple[tuple[int, int], ...]] | None = None
+    head_changed_lines: dict[str, tuple[tuple[int, int], ...]] | None = None

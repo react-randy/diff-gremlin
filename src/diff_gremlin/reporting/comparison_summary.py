@@ -29,7 +29,7 @@ def stage_rows(document: dict) -> list[tuple[str, str, str, str]]:
             delta["id"],
             f"{delta['base_status']} → {delta['head_status']}",
             f"{score(delta['base_score'])} → {score(delta['head_score'])}",
-            f"+{len(delta['added_findings'])} observed / -{len(delta['resolved_findings'])} confirmed",
+            f"+{len(delta['added_findings'])} observed / -{len(delta['resolved_findings'])} confirmed / {len(delta.get('changed_findings', []))} changed",
         )
         for delta in document["deltas"]
     ]

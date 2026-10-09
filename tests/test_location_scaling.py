@@ -140,7 +140,12 @@ BATCHES = {
 @pytest.mark.parametrize("size", [16, 256])
 def test_batch_resolves_inventory_once(tmp_path, kind, size):
     ctx = make_context(
-        tmp_path, FakeRunner(""), {f"Example{index}.java": "" for index in range(size)}
+        tmp_path,
+        FakeRunner(""),
+        {
+            f"Example{index}.java": "// first\n// second\n// third\n"
+            for index in range(size)
+        },
     )
     data, locations = batch_data(kind, ctx.files)
     original = Path.resolve

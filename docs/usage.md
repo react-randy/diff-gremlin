@@ -5,6 +5,9 @@
 Run `diff-gremlin doctor` to inspect installed tools and `diff-gremlin policy` to
 print the score policy identity and exit semantics.
 
+The comparison improvements below are on main and await the next release. The
+published 1.1.0 wheel and image retain their original comparison behavior.
+
 ## Check a repository
 
 ```sh
@@ -50,9 +53,59 @@ diff-gremlin compare . main HEAD
 diff-gremlin compare https://github.com/OWNER/REPO BASE_SHA HEAD_SHA --format json
 ```
 
-Delta reports preserve both receipts and stage IDs. An unavailable check cannot
+Full JSON comparison reports preserve both receipts and stage IDs. An unavailable check cannot
 resolve a finding from the other snapshot. Compare profiles and tool versions
 before interpreting a numeric change.
+
+## Comparison verdicts
+
+`delta_assessment` describes new or worsened evidence separately from the base and
+head snapshot assessments. An unchanged function above CC 50 remains a snapshot
+blocker but does not fail the default comparison gate. An existing function that
+grows from CC 52 to 61 is a changed observation and a blocking regression, even
+when another unchanged function remains the repository maximum. New or worsened
+critical findings and other existing blocker thresholds retain their force.
+
+Moved named functions match by stable identity. Changed measurements appear in
+`changed_findings` with base/head values. Ambiguous or anonymous observations are
+matched conservatively. Limited evidence cannot confirm a resolution or a clean
+comparison. Default comparisons exit 0 with complete evidence and no blocking
+regression, 1 for a demonstrated blocker regression, or 3 when evidence is
+incomplete. Explicit `--fail-on`/`--fail-under` retain head snapshot gate semantics,
+including inherited blockers. Repository `check` semantics stay as documented below.
+
+Shell function changes retain the named `shell-ast-decision-complexity-v1`
+estimate. The existing above-50 blocker threshold applies to that measure;
+it is not labelled as exact cyclomatic complexity.
+
+Duplicate identities can prevent attribution or a confirmed resolution. A
+provable increase in critical-observation counts or in the descending distribution
+of blocking complexity values still fails the gate. The receipt describes those
+aggregate facts without assigning the change to an uncertain individual function.
+
+## Select comparison paths
+
+```sh
+diff-gremlin compare . main HEAD --paths app --paths resources
+diff-gremlin compare . main HEAD --changed-paths --format json-delta
+diff-gremlin pr https://github.com/OWNER/REPO/pull/123 --changed-paths --paths ui
+```
+
+`--paths` accepts repeatable literal repository-relative files or subtrees;
+absolute paths, parent escapes and Git pathspec magic are rejected. Combining it
+with `--changed-paths` selects their intersection. Changed paths come from the
+exact supplied snapshots and include deleted and renamed paths on their respective
+sides. An empty selection remains empty. These options apply to `compare`/`pr`.
+
+Selection happens before content and selected-file budgets. Tree metadata remains
+bounded. Full tree overflow errors report the configured limit and observed count
+or lower bound. A selected receipt contains `source_selection` with mode, paths,
+per-side tracked total/selected/omitted counts and bounds. These counts precede
+ordinary directory and content exclusions. The required `scope.selection` gap
+keeps the strict assessment unknown: a selected scan describes partial repository
+evidence even when every analyzer completes. Repository history is excluded from
+this selected scope. Cross-file imports, clones and global metrics can change
+when only a subset is present; selection cannot certify the whole repository.
 
 ## Human reports and machine receipts
 
@@ -60,6 +113,7 @@ before interpreting a numeric change.
 diff-gremlin check . --format text
 diff-gremlin pr https://github.com/OWNER/REPO/pull/123 --format markdown
 diff-gremlin check . --format json > receipt.json
+diff-gremlin compare . main HEAD --format json-delta > delta.json
 ```
 
 Text is the default. Text and Markdown prioritize the top 20 findings and top 10
@@ -68,12 +122,30 @@ JSON retains every finding, next action, and source-scope path. Markdown is suit
 for a review artifact. JSON stdout
 contains only JSON on successful report creation; operational errors go to stderr
 and may produce no receipt. Save the process exit status as well as the document.
+One flushed completion line per stage appears on stderr, with base/head labels
+for comparisons. `--quiet` suppresses progress. Library scans remain silent unless
+given a progress callback.
 
 JSON declares `schema_version`, tool/policy versions, source identity, profile,
 coverage, stages, assessment, and limitations. Each stage names its tool/version,
 status, analyzed/eligible file counts, located findings, metrics, and limitation
 reason. A comparison contains the two scan receipts and their deltas. Consumers
 should check schema/profile/coverage and preserve unknown evidence.
+
+Schema 1.2.0 adds comparison delta assessment, changed observations, native
+measurement fields on findings, stage base/head reasons, and optional source
+selection. `in_changed_lines` is true/false for known coordinates and null when
+unavailable. It describes the finding's location, not proof that the diff caused
+it. Added observations use head coordinates, resolutions use base coordinates,
+and changed findings carry both. `json-delta` omits both full snapshot arrays while
+retaining source identities, profile/coverage, snapshot assessment summaries,
+delta verdict, stage reasons and changed evidence. Full JSON remains available.
+
+Missing TypeScript dependencies and JSX environment diagnostics are aggregated at
+stage level instead of repeated as source findings. The stage remains limited;
+other source diagnostics retain bounded sanitized compiler messages. Unsupported
+Blade templates and absent dependency semantics still keep strict evidence
+incomplete. They cannot be made complete by ignoring the limitation.
 
 Schema 1.1.0 adds `assessment.observed`, a provisional score from validated checks,
 including contributing/applicable category weights and partial categories. The

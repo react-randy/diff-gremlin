@@ -72,7 +72,16 @@ def fingerprint(repo):
 def cli(repo, environment, *arguments):
     before = fingerprint(repo)
     result = subprocess.run(
-        [sys.executable, "-I", "-B", "-c", CLI_BOOTSTRAP, str(SOURCE), *arguments],
+        [
+            sys.executable,
+            "-I",
+            "-B",
+            "-c",
+            CLI_BOOTSTRAP,
+            str(SOURCE),
+            *arguments,
+            "--quiet",
+        ],
         env=environment,
         capture_output=True,
         text=True,
@@ -202,7 +211,11 @@ def test_cli_compare_preserves_nonutf8_filename_unicode_finding(
     assert finding["line"] == 1 and finding["symbol"] == "U+202E"
     side = "base" if reverse else "head"
     stage = next(s for s in document[side]["stages"] if s["id"] == "security.unicode")
-    assert stage["findings"] == delta[change]
+    assert finding["in_changed_lines"] is True
+    assert stage["findings"] == [
+        {key: value for key, value in item.items() if key != "in_changed_lines"}
+        for item in delta[change]
+    ]
 
 
 @pytest.mark.parametrize("output_format", ["text", "markdown"])
