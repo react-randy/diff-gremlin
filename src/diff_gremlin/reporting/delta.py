@@ -77,6 +77,18 @@ def stage_delta(
         "head_reason": head.reason if head else "Stage not observed in head snapshot",
         "base_score": stage_score(base) if base else None,
         "head_score": stage_score(head) if head else None,
+        "base_coverage": {
+            "analyzed_files": base.analyzed_files,
+            "eligible_files": base.eligible_files,
+        }
+        if base
+        else None,
+        "head_coverage": {
+            "analyzed_files": head.analyzed_files,
+            "eligible_files": head.eligible_files,
+        }
+        if head
+        else None,
         "comparable": not bool(limit),
         "metrics": numeric_deltas(base, head) if not limit and base and head else {},
         **changes,

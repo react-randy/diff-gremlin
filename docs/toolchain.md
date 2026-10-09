@@ -241,5 +241,8 @@ unserialize options have benign controls. These are lexical contextual observati
 not inter-file taint analysis, runtime reachability or exploitability verdicts.
 Blade, Laravel framework-specific rules and Composer dependency audits are outside
 this capability. Named stages and limits preserve that distinction in mixed PHP/TS
-repository and GitLab MR reports. Product version is 1.1.0; the existing report
-schema and score policy remain 1.1.0 because their structure/thresholds are unchanged.
+repository and GitLab MR reports. The published 1.1.0 release uses report schema
+and score policy 1.1.0. The current unreleased comparison receipt uses schema 1.2.0;
+snapshot score policy remains 1.1.0. Source fixes keep the package version at 1.1.0
+pending a separately published release; use a pinned source commit to identify the
+tested implementation.

@@ -128,6 +128,27 @@ docker build --tag diff-gremlin:local .
 docker run --rm diff-gremlin:local doctor
 ```
 
+To verify unreleased fixes, use a clean reviewed checkout at its full commit SHA
+and record that source identity explicitly. The CLI can still report version
+1.1.0; that alone does not identify a source build or change the published release.
+The default Docker build does not automatically add a commit label.
+
+```sh
+SOURCE_REV='FULL_40_CHARACTER_COMMIT_SHA'
+git fetch origin "$SOURCE_REV"
+git checkout --detach "$SOURCE_REV"
+test "$(git rev-parse HEAD)" = "$SOURCE_REV"
+test -z "$(git status --porcelain)"
+docker build --label "org.opencontainers.image.revision=$SOURCE_REV" \
+  --tag "diff-gremlin:source-$SOURCE_REV" .
+docker image inspect --format '{{.Id}} {{index .Config.Labels "org.opencontainers.image.revision"}}' \
+  "diff-gremlin:source-$SOURCE_REV"
+docker run --rm "diff-gremlin:source-$SOURCE_REV" doctor
+```
+
+Keep the full source SHA and resulting image ID with the receipt. The revision
+label records the supplied build input; it does not attest to a public release.
+
 The source environment alone does not supply Gitleaks/shfmt/Node/JDK. See
 [development](development.md) and [toolchain](toolchain.md) for explicit setup.
 
