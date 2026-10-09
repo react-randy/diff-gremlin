@@ -1,5 +1,6 @@
 """Measure production function cyclomatic complexity once with Lizard."""
 
+import hashlib
 import time
 import xml.etree.ElementTree as ET
 from dataclasses import replace
@@ -78,6 +79,14 @@ def _hotspot_findings(hotspots: list[dict]) -> list[Finding]:
             path=row["file"],
             line=row["line"],
             symbol=row["function"],
+            fingerprint=hashlib.sha256(
+                f"lizard.high-complexity\0{row['file']}\0{row['function']}".encode(
+                    "utf-8", "surrogateescape"
+                )
+            ).hexdigest()[:20],
+            metric="cyclomatic_complexity",
+            value=row["cc"],
+            identity_kind="qualified",
         )
         for row in hotspots
     ]

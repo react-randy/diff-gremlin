@@ -1,9 +1,11 @@
 """Validate Lizard XML observations against the exact production inventory."""
 
+import ast
 import xml.etree.ElementTree as ET
 from collections import Counter
 
 from diff_gremlin.analyzers.locations import SourceLocations
+from diff_gremlin.analyzers.python.declarations import functions as python_functions
 from diff_gremlin.analyzers.python.declarations import missing_declarations
 from diff_gremlin.domain.context import ScanContext, SourceFile
 
@@ -48,6 +50,24 @@ def _python_declarations(
             file, grouped.get(file.relative_path, [])
         )
     ]
+
+
+def _qualified_python_names(
+    files: tuple[SourceFile, ...], functions: list[dict]
+) -> None:
+    """Supply lexical class owners omitted by Lizard's Python XML names."""
+    grouped = _functions_by_file(functions)
+    for file in files:
+        if file.path.suffix.lower() != ".py":
+            continue
+        tree = ast.parse(file.path.read_text(encoding="utf-8"))
+        names = {
+            node.lineno: (node.name, name) for node, name in python_functions(tree)
+        }
+        for row in grouped.get(file.relative_path, []):
+            declaration = names.get(row["line"])
+            if declaration and row["function"].split(".")[-1] == declaration[0]:
+                row["function"] = declaration[1]
 
 
 def _values(item: ET.Element, length: int, *, signed_ncss: bool = False) -> list[int]:
@@ -106,4 +126,6 @@ def observations(
     seen = _file_counts(locations, files, file_measure)
     functions = _functions(locations, function_measure)
     _verify_function_counts(seen, functions)
-    return functions + _python_declarations(files, functions)
+    functions += _python_declarations(files, functions)
+    _qualified_python_names(files, functions)
+    return functions

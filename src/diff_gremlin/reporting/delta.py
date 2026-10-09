@@ -1,100 +1,116 @@
 """Compare stable identities while preserving both full evidence receipts."""
 
-import hashlib
-from collections import Counter
 from dataclasses import asdict
 
-from diff_gremlin.domain.findings import Finding
 from diff_gremlin.domain.reports import ScanReport
 from diff_gremlin.domain.stages import StageResult
-from diff_gremlin.policy.metrics import stage_score
+from diff_gremlin.policy.comparison import delta_assessment
+from diff_gremlin.policy.metrics import number, stage_score
+from diff_gremlin.reporting.delta_matching import ChangedLines, match_findings
 from diff_gremlin.reporting.serialization import SCHEMA_VERSION, report_document
-
-
-def identity(finding: Finding) -> str:
-    if finding.fingerprint:
-        return finding.fingerprint
-    text = f"{finding.rule}\0{finding.path}\0{finding.symbol}\0{finding.message}"
-    return hashlib.sha256(text.encode("utf-8", "surrogateescape")).hexdigest()[:20]
-
-
-def unmatched(findings: list[Finding], other: list[Finding]) -> list[dict]:
-    remaining = Counter(identity(f) + ":" + f.severity for f in other)
-    result = []
-    for finding in findings:
-        key = identity(finding) + ":" + finding.severity
-        if remaining[key]:
-            remaining[key] -= 1
-        else:
-            result.append(asdict(finding))
-    return result
 
 
 def numeric_deltas(base: StageResult, head: StageResult) -> dict:
     result = {}
     for key in base.metrics.keys() & head.metrics.keys():
-        before, after = base.metrics[key], head.metrics[key]
-        if (
-            isinstance(before, (int, float))
-            and isinstance(after, (int, float))
-            and not isinstance(before, bool)
-            and not isinstance(after, bool)
-        ):
+        before, after = number(base, key), number(head, key)
+        if before is not None and after is not None:
             result[key] = {
-                "base": before,
-                "head": after,
+                "base": base.metrics[key],
+                "head": head.metrics[key],
                 "delta": round(after - before, 4),
             }
     return result
 
 
-def side_details(stage: StageResult | None) -> dict:
-    if stage is None:
-        return {"status": "absent", "score": None, "findings": []}
-    return {
-        "status": stage.status,
-        "score": stage_score(stage),
-        "findings": stage.findings,
-    }
-
-
-def confirmed_changes(base: StageResult | None, head: StageResult | None) -> dict:
+def comparison_limit(base: StageResult | None, head: StageResult | None) -> str:
     if base is None or head is None or base.status != "ok" or head.status != "ok":
-        return {
-            "comparable": False,
-            "metrics": {},
-            "resolved_findings": [],
-            "resolution_note": "Resolution requires complete observations on both sides.",
-        }
-    return {
-        "comparable": True,
-        "metrics": numeric_deltas(base, head),
-        "resolved_findings": unmatched(base.findings, head.findings),
-        "resolution_note": "",
-    }
+        return "Resolution requires complete observations on both sides."
+    if base.tool != head.tool or base.version != head.version:
+        return "Resolution requires observations from the same tool and version."
+    if base.scope != head.scope or base.category != head.category:
+        return (
+            "Resolution requires observations of the same analysis scope and category."
+        )
+    return ""
 
 
-def stage_delta(base: StageResult | None, head: StageResult | None) -> dict:
+def stage_delta(
+    base: StageResult | None,
+    head: StageResult | None,
+    *,
+    base_changed_lines: ChangedLines | None = None,
+    head_changed_lines: ChangedLines | None = None,
+    compatibility_note: str = "",
+) -> dict:
     stage = head or base
     if stage is None:
         raise ValueError("A delta requires at least one observed stage")
-    before, after = side_details(base), side_details(head)
+    limit = compatibility_note or comparison_limit(base, head)
+    changes = match_findings(
+        base.findings if base else [],
+        head.findings if head else [],
+        base_lines=base_changed_lines,
+        head_lines=head_changed_lines,
+    )
+    if limit:
+        changes["resolved_findings"] = []
+        changes["added_findings"].extend(
+            item["head"] for item in changes["changed_findings"]
+        )
+        changes["changed_findings"] = []
+    ambiguity_note = (
+        "Duplicate identities with unmatched observations remain ambiguous; their resolutions are unconfirmed."
+        if changes["ambiguous_identities"]
+        else ""
+    )
+    body_note = (
+        "Changed anonymous bodies remain unmatched; function continuity is unknown."
+        if changes["uncertain_identities"]
+        else ""
+    )
     return {
         "id": stage.id,
-        "base_status": before["status"],
-        "head_status": after["status"],
-        "base_score": before["score"],
-        "head_score": after["score"],
-        "added_findings": unmatched(after["findings"], before["findings"]),
-        **confirmed_changes(base, head),
+        "base_status": base.status if base else "absent",
+        "head_status": head.status if head else "absent",
+        "base_reason": base.reason if base else "Stage not observed in base snapshot",
+        "head_reason": head.reason if head else "Stage not observed in head snapshot",
+        "base_score": stage_score(base) if base else None,
+        "head_score": stage_score(head) if head else None,
+        "comparable": not bool(limit),
+        "metrics": numeric_deltas(base, head) if not limit and base and head else {},
+        **changes,
+        "resolution_note": " ".join(
+            item for item in (limit, ambiguity_note, body_note) if item
+        ),
     }
 
 
 def compare_document(
-    base: ScanReport, head: ScanReport, *, review=None, comparison_base_sha=""
+    base: ScanReport,
+    head: ScanReport,
+    *,
+    review=None,
+    comparison_base_sha="",
+    base_changed_lines: ChangedLines | None = None,
+    head_changed_lines: ChangedLines | None = None,
 ) -> dict:
     before = {stage.id: stage for stage in base.stages}
     after = {stage.id: stage for stage in head.stages}
+    deltas = [
+        stage_delta(
+            before.get(key),
+            after.get(key),
+            base_changed_lines=base_changed_lines,
+            head_changed_lines=head_changed_lines,
+            compatibility_note=(
+                "Comparison requires the same analysis profile."
+                if base.profile != head.profile
+                else ""
+            ),
+        )
+        for key in sorted(before.keys() | after.keys())
+    ]
     return {
         "schema_version": SCHEMA_VERSION,
         "mode": "comparison",
@@ -103,8 +119,6 @@ def compare_document(
         "comparison_semantics": "exact supplied base snapshot versus exact supplied head; not a simulated merge result",
         "base": report_document(base),
         "head": report_document(head),
-        "deltas": [
-            stage_delta(before.get(key), after.get(key))
-            for key in sorted(before.keys() | after.keys())
-        ],
+        "deltas": deltas,
+        "delta_assessment": delta_assessment(base, head, deltas),
     }
