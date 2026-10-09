@@ -74,6 +74,10 @@ regression, 1 for a demonstrated blocker regression, or 3 when evidence is
 incomplete. Explicit `--fail-on`/`--fail-under` retain head snapshot gate semantics,
 including inherited blockers. Repository `check` semantics stay as documented below.
 
+Shell function changes retain the named `shell-ast-decision-complexity-v1`
+estimate. The existing above-50 blocker threshold applies to that measure;
+it is not labelled as exact cyclomatic complexity.
+
 ## Select comparison paths
 
 ```sh

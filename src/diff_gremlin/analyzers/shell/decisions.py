@@ -1,6 +1,8 @@
 """Versioned Shell AST decision estimates; never claim exact runtime paths."""
 
-from diff_gremlin.analyzers.shell.walk import walk
+from collections.abc import Iterator
+
+from diff_gremlin.analyzers.shell.walk import children, walk
 
 MEASURE = "shell-ast-decision-complexity-v1"
 
@@ -19,16 +21,27 @@ def decision_count(node: dict) -> int:
     return 0
 
 
+def named_functions(tree: dict) -> Iterator[tuple[dict, str]]:
+    """Retain lexical owners without coupling identity to source positions."""
+    pending: list[tuple[dict, tuple[str, ...]]] = [(tree, ())]
+    while pending:
+        node, owners = pending.pop()
+        if node["_kind"] == "FuncDecl":
+            owners = (*owners, node["Name"]["Value"])
+            yield node, ".".join(
+                name.replace("\\", "\\\\").replace(".", "\\.") for name in owners
+            )
+        pending.extend((child, owners) for child in reversed(tuple(children(node))))
+
+
 def function_rows(tree: dict, path: str) -> list[dict]:
     """Measure each named function while excluding nested function bodies."""
     rows = []
-    for node in walk(tree):
-        if node["_kind"] != "FuncDecl":
-            continue
+    for node, name in named_functions(tree):
         rows.append(
             {
                 "file": path,
-                "function": node["Name"]["Value"],
+                "function": name,
                 "line": node["Pos"]["Line"],
                 "cc": 1
                 + sum(

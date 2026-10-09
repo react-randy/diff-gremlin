@@ -1,6 +1,7 @@
 """Gate demonstrable comparison regressions under the existing blocker policy."""
 
 from collections import defaultdict
+from math import isfinite
 
 from diff_gremlin.domain.findings import Finding, observation_identity
 from diff_gremlin.domain.reports import ScanReport
@@ -9,6 +10,20 @@ from diff_gremlin.policy.gates import Gates, exit_code
 from diff_gremlin.policy.metrics import number
 
 COMPARISON_POLICY_VERSION = "1.0.0"
+COMPLEXITY_MEASURES = frozenset(
+    {"cyclomatic_complexity", "shell-ast-decision-complexity-v1"}
+)
+
+
+def _complexity_blocker(metric: str, value: object) -> bool:
+    """Apply the existing threshold to supported, explicitly named measures."""
+    return (
+        metric in COMPLEXITY_MEASURES
+        and isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and isfinite(value)
+        and value > 50
+    )
 
 
 def _finding_key(finding: Finding) -> str:
@@ -45,10 +60,10 @@ def _limited_regressions(
         old = previous[key]
         if len(old) == 1:
             known_worsening = (
-                finding.metric == old[0].metric == "cyclomatic_complexity"
+                finding.metric == old[0].metric
                 and finding.value is not None
                 and old[0].value is not None
-                and finding.value > 50
+                and _complexity_blocker(finding.metric, finding.value)
                 and finding.value > old[0].value
             ) or (finding.severity == "critical" and old[0].severity != "critical")
         else:
@@ -57,11 +72,7 @@ def _limited_regressions(
                 and base.status == "ok"
                 and (
                     finding.severity == "critical"
-                    or (
-                        finding.metric == "cyclomatic_complexity"
-                        and finding.value is not None
-                        and finding.value > 50
-                    )
+                    or _complexity_blocker(finding.metric, finding.value)
                 )
             )
         if known_worsening:
@@ -88,17 +99,14 @@ def _measurement_regressions(delta: dict) -> list[str]:
         if key in uncertain:
             continue
         if (
-            finding.get("metric") == "cyclomatic_complexity"
-            and isinstance(finding.get("value"), (int, float))
-            and finding["value"] > 50
+            _complexity_blocker(finding.get("metric", ""), finding.get("value"))
         ) or finding["severity"] == "critical":
             result.append(f"{delta['id']}: new blocking observation {finding['rule']}")
     for finding in delta["changed_findings"]:
         measurement = finding["measurement"]
         if (
             measurement
-            and measurement["metric"] == "cyclomatic_complexity"
-            and measurement["head"] > 50
+            and _complexity_blocker(measurement["metric"], measurement["head"])
             and measurement["delta"] > 0
         ) or (
             finding["head"]["severity"] == "critical"
