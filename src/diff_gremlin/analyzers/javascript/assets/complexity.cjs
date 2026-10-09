@@ -17,7 +17,8 @@ function keyName(node) {
   if (!node || node.computed) return '';
   const key = node.key;
   if (!key) return '';
-  if (key.type === 'Identifier' || key.type === 'PrivateIdentifier') return key.name;
+  if (key.type === 'Identifier') return key.name;
+  if (key.type === 'PrivateIdentifier') return '#' + key.name;
   // Source literal values remain private; their digest is enough for identity.
   return '#key:' + digest(String(key.value));
 }

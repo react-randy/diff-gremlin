@@ -95,6 +95,17 @@ def test_native_nested_named_functions_retain_function_owner(tmp_path):
     assert result.findings[0].symbol == "outer.choose"
 
 
+def test_native_private_and_public_members_keep_distinct_identity(tmp_path):
+    private = js_function().replace("function choose", "#choose")
+    public = js_function().replace("function choose", "choose")
+    result = js_stage(tmp_path, "class Example {\n" + private + public + "}\n")
+    assert {finding.symbol for finding in result.findings} == {
+        "Example.method:#choose",
+        "Example.method:choose",
+    }
+    assert len({finding.fingerprint for finding in result.findings}) == 2
+
+
 def test_native_anonymous_body_matches_moves_but_changed_body_is_unpaired(tmp_path):
     body = js_function().replace("function choose", "function")
     base = js_stage(tmp_path / "base", "const callbacks = [" + body + "];\n")
