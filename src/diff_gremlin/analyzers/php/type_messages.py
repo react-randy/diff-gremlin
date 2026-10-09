@@ -7,6 +7,9 @@ from diff_gremlin.runtime.environment import redact
 _NAME = r"[A-Za-z_][A-Za-z0-9_]*(?:\\[A-Za-z_][A-Za-z0-9_]*)*"
 _MEMBER = _NAME + r"::(?:\$?[A-Za-z_][A-Za-z0-9_]*)(?:\(\))?"
 _TYPE = r"\??" + _NAME + r"(?:\[\])*(?:[|&]\??" + _NAME + r"(?:\[\])*)*"
+_CREDENTIAL_PREFIX = re.compile(
+    r"(?:\b|_)(?:gh[pousr]_|github_pat_|sk[-_]|AKIA)", re.IGNORECASE
+)
 _TEMPLATES = tuple(
     re.compile(pattern + r"\Z")
     for pattern in (
@@ -29,6 +32,8 @@ def diagnostic_message(message: str) -> str:
     if len(message) > 300 or not message.isascii():
         return ""
     if re.search(r"[\x00-\x1f\x7f]|[A-Za-z0-9_=-]{24,}", message):
+        return ""
+    if _CREDENTIAL_PREFIX.search(message):
         return ""
     if redact(message) != message:
         return ""

@@ -145,6 +145,73 @@ def test_env_secret_cannot_be_retained_as_native_identifier(monkeypatch):
     assert diagnostic_message("Function ShortSecret not found.") == ""
 
 
+_SHORT_CREDENTIALS = (
+    "ghp_SyntheticToken",
+    "gho_ShortToken",
+    "ghu_ShortToken",
+    "ghs_ShortToken",
+    "ghr_ShortToken",
+    "github_pat_ShortToken",
+    "sk_ShortKey",
+    "AKIAShortKey",
+)
+
+
+@pytest.mark.parametrize("name", (*_SHORT_CREDENTIALS, "sk-ShortKey"))
+@pytest.mark.parametrize(
+    "template",
+    [
+        "Function {name} not found.",
+        "Call to an undefined method Local::{name}().",
+        "Access to an undefined property Local::${name}.",
+        "Method Local::value() should return int but returns {name}.",
+    ],
+)
+def test_short_credential_prefix_never_enters_sanitized_context(name, template):
+    assert len(name) < 24
+    assert diagnostic_message(template.format(name=name)) == ""
+
+
+def test_native_short_credential_names_stay_counted_without_public_context(context):
+    observed = []
+
+    def native(command, **kwargs):
+        result = run(command, **kwargs)
+        if "analyse" in command:
+            data = json.loads("{" + result.stdout.partition("{")[2])
+            observed.extend(
+                message for row in data["files"].values() for message in row["messages"]
+            )
+        return result
+
+    source = "<?php\n" + "\n".join(f"{name}();" for name in _SHORT_CREDENTIALS)
+    stage = analyze_php_types(context([("synthetic.php", "php", source)], native))
+    assert len(observed) == len(_SHORT_CREDENTIALS)
+    assert all(item["identifier"] == "function.notFound" for item in observed)
+    assert all(
+        any(name in item["message"] for name in _SHORT_CREDENTIALS) for item in observed
+    )
+    assert stage.status == "limited" and stage_score(stage) is None
+    assert stage.metrics["native_diagnostic_count"] == len(_SHORT_CREDENTIALS)
+    assert stage.metrics["native_rule_counts"] == {
+        "function.notFound": len(_SHORT_CREDENTIALS)
+    }
+    assert stage.metrics["error_count"] == 0
+    assert stage.metrics["warning_count"] == len(_SHORT_CREDENTIALS)
+    assert len(stage.findings) == 1
+    assert stage.findings[0].value == len(_SHORT_CREDENTIALS)
+    assert not any(
+        name in finding.message
+        for name in _SHORT_CREDENTIALS
+        for finding in stage.findings
+    )
+
+
+def test_short_credential_prefix_filter_preserves_normal_native_context():
+    message = "Function ask_Function not found."
+    assert diagnostic_message(message) == message
+
+
 def test_sanitized_evidence_is_plain_text(context):
     file = context([("owned.php", "php", "<?php echo 1;\n")]).files[0]
     rows = [
