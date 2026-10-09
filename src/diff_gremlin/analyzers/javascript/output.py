@@ -21,6 +21,9 @@ _NAME_CONTEXT = re.compile(
     r"(?:[Pp]arameter|[Pp]roperty|[Nn]ame|[Mm]odule|[Nn]amespace|[Mm]ember|[Cc]lass|[Ii]nterface) $"
 )
 _MODULE = re.compile(r"(?:@[a-zA-Z0-9_-]+/)?[a-zA-Z0-9_.-]+(?:/[a-zA-Z0-9_.-]+)*\Z")
+_PROSE_MARKUP = re.compile(
+    r"(\[path\]|\[redacted\])|<[^>]*>|\[[^\]]*\]|[<>\[\]`*_#|\\]"
+)
 _PRIMITIVES = frozenset(
     {
         "string",
@@ -44,27 +47,28 @@ def diagnostic_message(value: object) -> str:
     if not isinstance(value, str) or not value:
         raise ValueError("missing native diagnostic message")
     # Bound work before looking at untrusted source fragments. Credential and
-    # path filtering precede the bounded, single-line presentation surface.
+    # path filtering precede bounded, single-line evidence.
     text = redact(value[:4096])
     text = re.sub(r"(?<![A-Za-z0-9_@.-])(?:[A-Za-z]:[\\/]|/)[^\s'\"`]+", "[path]", text)
     text = re.sub(r"\b[A-Za-z0-9_=-]{24,}\b", "[redacted]", text)
     text = re.sub(
-        r"\b(?:gh[pousr]_[A-Za-z0-9_]+|github_pat_[A-Za-z0-9_]+|sk[-_][A-Za-z0-9_-]+|AKIA[A-Z0-9]+)\b",
+        r"(?:\b|_)(?:gh[pousr]_|github_pat_|sk[-_]|AKIA)[A-Za-z0-9_-]*",
         "[redacted]",
         text,
+        flags=re.IGNORECASE,
     )
     quoted_parts = list(_QUOTED.finditer(text))
-    remainder = _QUOTED.sub("", text)
-    if any(char in remainder for char in "'\"`") or any(
-        any(char in match.group()[1:-1] for char in "'\"`") for match in quoted_parts
-    ):
+    if _unsafe_quoting(text, quoted_parts):
         return "Native diagnostic text withheld because quoting was unsafe"
 
     def quoted(match: re.Match[str]) -> str:
         content = match.group()[1:-1]
         prefix = text[: match.start()]
         name = (
-            bool(_NAME_CONTEXT.search(prefix))
+            (
+                bool(_NAME_CONTEXT.search(prefix))
+                or prefix.endswith(" does not exist on type ")
+            )
             and bool(_IDENTIFIER.fullmatch(content))
             and len(content) <= 80
         )
@@ -72,18 +76,41 @@ def diagnostic_message(value: object) -> str:
             prefix.endswith("module ")
             and bool(_MODULE.fullmatch(content))
             and len(content) <= 100
+            and ".." not in content.split("/")
         )
         primitive = content in _PRIMITIVES
         return match.group() if name or module or primitive else "'[redacted]'"
 
-    text = _QUOTED.sub(quoted, text)
-    # Compiler prose does not need markup. Remove raw quote remnants (including
-    # unmatched attacker quotes), controls, bidi formatting and Markdown syntax.
+    parts, start = [], 0
+    for match in quoted_parts:
+        parts.extend((_diagnostic_prose(text[start : match.start()]), quoted(match)))
+        start = match.end()
+    parts.append(_diagnostic_prose(text[start:]))
+    # Evidence stays format-neutral. Quoted identifier grammar preserves safe
+    # underscores; unquoted markup is withheld, rather than presentation-escaped.
+    text = "".join(parts)
     text = "".join(
         " " if unicodedata.category(char).startswith("C") else char for char in text
     )
-    text = re.sub(r"([<>\[\]`*_#|\\])", r"\\\1", text)
     return " ".join(text.split())[:512]
+
+
+def _diagnostic_prose(text: str) -> str:
+    return _PROSE_MARKUP.sub(lambda match: match.group(1) or "[redacted]", text)
+
+
+def _unsafe_quoting(text: str, parts: list[re.Match[str]]) -> bool:
+    if any(char in _QUOTED.sub("", text) for char in "'\"`"):
+        return True
+    return any(
+        any(char in match.group()[1:-1] for char in "'\"`")
+        or any(
+            char.isalnum() or char in "_$'\"`"
+            for char in text[max(0, match.start() - 1) : match.start()]
+            + text[match.end() : match.end() + 1]
+        )
+        for match in parts
+    )
 
 
 def natural(value: object) -> TypeGuard[int]:

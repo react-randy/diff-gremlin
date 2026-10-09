@@ -21,7 +21,8 @@ function safeMessage(message, code) {
   return parts.map((part, index) => {
     if (index === parts.length-1) return part;
     const value = match[index+1];
-    const named = /(?:[Pp]arameter|[Pp]roperty|[Nn]ame|[Nn]amespace|[Mm]ember|[Cc]lass|[Ii]nterface) '(?:[A-Za-z_$][A-Za-z0-9_$]*\.)*$/.test(part)
+    const named = (/(?:[Pp]arameter|[Pp]roperty|[Nn]ame|[Nn]amespace|[Mm]ember|[Cc]lass|[Ii]nterface) '(?:[A-Za-z_$][A-Za-z0-9_$]*\.)*$/.test(part)
+      || / does not exist on type '$/.test(part))
       && value.length <= 80 && /^[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*$/.test(value);
     const module = /[Mm]odule '$/.test(part) && value.length <= 100
       && /^(?:@[A-Za-z0-9_-]+\/)?[A-Za-z0-9_.-]+(?:\/[A-Za-z0-9_.-]+)*$/.test(value)

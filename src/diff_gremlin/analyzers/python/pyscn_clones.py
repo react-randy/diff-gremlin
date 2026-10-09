@@ -80,6 +80,30 @@ def _group_findings(
     return findings
 
 
+def _clone_groups(clone: dict, stats: dict, expected: int, percent: float) -> list:
+    """Accept PyScn's explicit null encoding only for corroborated empty results."""
+    if count(stats.get("total_clone_groups")) != expected:
+        raise ValueError("PyScn clone group count differs from report rows")
+    if "clone_groups" not in clone:
+        raise ValueError("PyScn clone groups missing from result")
+    value = clone["clone_groups"]
+    if value is None:
+        if expected != 0 or percent != 0:
+            raise ValueError("PyScn null clone groups contradict duplication counters")
+        for key in ("duplicated_fragments", "total_clones", "total_clone_pairs"):
+            if count(stats.get(key)) != 0:
+                raise ValueError("PyScn null clone groups contradict clone counters")
+        if "clone_pairs" not in clone or (
+            clone["clone_pairs"] is not None and list_value(clone["clone_pairs"])
+        ):
+            raise ValueError("PyScn null clone groups contradict pair evidence")
+        return []
+    groups = list_value(value)
+    if len(groups) != expected:
+        raise ValueError("PyScn clone group count differs from report rows")
+    return groups
+
+
 def clone_observations(
     ctx: ScanContext, files: tuple[SourceFile, ...], data: dict
 ) -> tuple[dict, list[Finding]]:
@@ -96,9 +120,7 @@ def clone_observations(
     analyzed = count(stats.get("files_analyzed"))
     if analyzed != count(summary.get("analyzed_files")):
         raise ValueError("PyScn clone coverage differs from snapshot coverage")
-    groups = list_value(clone.get("clone_groups"))
-    if len(groups) != expected or count(stats.get("total_clone_groups")) != expected:
-        raise ValueError("PyScn clone group count differs from report rows")
+    groups = _clone_groups(clone, stats, expected, percent)
     return {"duplication_percent": percent, "clone_groups": expected}, _group_findings(
         ctx, files, groups
     )

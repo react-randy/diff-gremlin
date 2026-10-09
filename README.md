@@ -62,7 +62,8 @@ diff-gremlin compare . main HEAD --format json-delta
 diff-gremlin compare . main HEAD --changed-paths --paths app --format markdown
 ```
 
-Selected paths are explicitly partial and retain exit 3 for missing evidence.
+Selected paths are explicitly partial: exit 3 when no blocker is proven, or exit 1
+when the observations prove a new or worsened blocker.
 Progress appears on stderr; `--quiet` suppresses it. The published 1.1.0 wheel and
 image retain their released behavior. [Comparison semantics →](docs/usage.md#comparison-verdicts)
 

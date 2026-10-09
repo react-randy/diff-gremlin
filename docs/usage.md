@@ -82,6 +82,9 @@ Duplicate identities can prevent attribution or a confirmed resolution. A
 provable increase in critical-observation counts or in the descending distribution
 of blocking complexity values still fails the gate. The receipt describes those
 aggregate facts without assigning the change to an uncertain individual function.
+Values at the same descending rank belong to sorted distributions; they do not
+identify the same function across snapshots. A larger head value at that rank
+proves that at least one blocker is new or worsened across functions.
 
 ## Select comparison paths
 
@@ -106,6 +109,8 @@ keeps the strict assessment unknown: a selected scan describes partial repositor
 evidence even when every analyzer completes. Repository history is excluded from
 this selected scope. Cross-file imports, clones and global metrics can change
 when only a subset is present; selection cannot certify the whole repository.
+A partial comparison exits 3 when no blocking regression is proven, or 1 when a
+blocking regression is proven. It cannot exit 0 by treating omitted paths as clean.
 
 ## Human reports and machine receipts
 
@@ -133,19 +138,35 @@ reason. A comparison contains the two scan receipts and their deltas. Consumers
 should check schema/profile/coverage and preserve unknown evidence.
 
 Schema 1.2.0 adds comparison delta assessment, changed observations, native
-measurement fields on findings, stage base/head reasons, and optional source
+measurement fields on findings, stage base/head reasons and coverage, and optional source
 selection. `in_changed_lines` is true/false for known coordinates and null when
 unavailable. It describes the finding's location, not proof that the diff caused
 it. Added observations use head coordinates, resolutions use base coordinates,
 and changed findings carry both. `json-delta` omits both full snapshot arrays while
 retaining source identities, profile/coverage, snapshot assessment summaries,
-delta verdict, stage reasons and changed evidence. Full JSON remains available.
+delta verdict, stage reasons and changed evidence. Each delta's `base_coverage`
+and `head_coverage` contains `analyzed_files` and `eligible_files`; an absent stage
+has null coverage rather than invented zero counts. Counts never override a
+limited or unavailable status. Full JSON remains available.
 
 Missing TypeScript dependencies and JSX environment diagnostics are aggregated at
 stage level instead of repeated as source findings. The stage remains limited;
 other source diagnostics retain bounded sanitized compiler messages. Unsupported
 Blade templates and absent dependency semantics still keep strict evidence
 incomplete. They cannot be made complete by ignoring the limitation.
+
+PHP unresolved references are grouped by explicit PHPStan identifier after native
+rows, paths, counters and exit status are validated. Raw diagnostic totals and
+per-rule counts remain in stage metrics. Missing class, property or method
+references can reflect unavailable dependencies or local mistakes; their grouped
+findings keep the stage limited. Other local type findings retain bounded sanitized
+native context. Evidence strings are plain text in JSON; Markdown escaping occurs
+when the report is rendered.
+
+PyScn's explicit null clone-group encoding is accepted only when successful
+coverage and zero group, pair, fragment and duplication counters corroborate an
+empty result. Missing arrays, contradictory counters and malformed nested clone
+fragments remain invalid evidence.
 
 Schema 1.1.0 adds `assessment.observed`, a provisional score from validated checks,
 including contributing/applicable category weights and partial categories. The

@@ -71,7 +71,10 @@ def _blocking_surplus(base: StageResult, head: StageResult) -> list[str]:
         for rank, value in enumerate(new):
             if value > old[rank]:
                 result.append(
-                    f"{head.id}: {metric} blocking value at descending rank {rank + 1} increased from {old[rank]:g} to {value:g}"
+                    f"{head.id}: {metric} sorted blocking-value distributions differ "
+                    f"at descending rank {rank + 1} (base {old[rank]:g}, head {value:g}); "
+                    "at least one blocker is new or worsened across functions; "
+                    "function attribution is uncertain"
                 )
                 break
     return result
