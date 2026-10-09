@@ -7,7 +7,10 @@ from pathlib import Path
 
 from diff_gremlin.analyzers.javascript.output import natural, positive
 from diff_gremlin.analyzers.php.type_identity import LEVEL
-from diff_gremlin.analyzers.php.type_messages import diagnostic_message
+from diff_gremlin.analyzers.php.type_messages import (
+    contains_credential_prefix,
+    diagnostic_message,
+)
 from diff_gremlin.domain.context import SourceFile
 from diff_gremlin.domain.findings import Finding
 from diff_gremlin.runtime.environment import redact
@@ -41,6 +44,8 @@ def _source_identity(name: object, locations: dict[Path, SourceFile]) -> Path:
         )
         leaf = label.replace("\\", "/").rsplit("/", 1)[-1]
         leaf = redact(leaf[:100])
+        if contains_credential_prefix(leaf):
+            leaf = "redacted"
         leaf = re.sub(r"[A-Za-z0-9_=-]{24,}", "redacted", leaf)
         leaf = re.sub(r"[^A-Za-z0-9_.-]", "?", leaf)
         raise ValueError(

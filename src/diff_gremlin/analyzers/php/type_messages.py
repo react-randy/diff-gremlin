@@ -27,13 +27,18 @@ _TEMPLATES = tuple(
 )
 
 
+def contains_credential_prefix(text: str) -> bool:
+    """Recognize conservative credential prefixes in bounded native context."""
+    return bool(_CREDENTIAL_PREFIX.search(text))
+
+
 def diagnostic_message(message: str) -> str:
     """Admit useful native templates only when their entire context is safe."""
     if len(message) > 300 or not message.isascii():
         return ""
     if re.search(r"[\x00-\x1f\x7f]|[A-Za-z0-9_=-]{24,}", message):
         return ""
-    if _CREDENTIAL_PREFIX.search(message):
+    if contains_credential_prefix(message):
         return ""
     if redact(message) != message:
         return ""

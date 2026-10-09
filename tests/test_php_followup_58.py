@@ -2,6 +2,7 @@
 
 import json
 from collections import Counter
+from dataclasses import replace
 
 import pytest
 import test_polyglot
@@ -265,6 +266,47 @@ def test_each_explicit_family_reconciles_raw_and_grouped_rows(context, identifie
     shown = display_findings(findings)
     assert len(shown) == 1 and shown[0].value == 2
     assert type_metrics(findings, unresolved)["native_rule_counts"] == {identifier: 2}
+
+
+@pytest.mark.parametrize(
+    "name", ["ghp_Probe", "Box_sk_Probe", "GHP_Probe", "Box_AKIAProbe"]
+)
+def test_rejected_foreign_identity_withholds_credential_leaf(context, name):
+    file = context([("owned.php", "php", "<?php echo 1;\n")]).files[0]
+    data = _document(file, [_row()])
+    data["files"] = {f"/foreign/{name}.php": data["files"][str(file.path)]}
+    with pytest.raises(ValueError) as rejected:
+        diagnostics(json.dumps(data), {file.path: file}, 1)
+    reason = str(rejected.value)
+    assert "foreign source" in reason and "unrecognized source identity" in reason
+    assert name not in reason and "/foreign/" not in reason and "redacted" in reason
+
+
+def test_native_rejected_identity_keeps_failed_status_without_credential_context(
+    context,
+):
+    observed = []
+
+    def corrupt_identity(command, **kwargs):
+        result = run(command, **kwargs)
+        if "analyse" not in command:
+            return result
+        prefix, separator, document = result.stdout.partition("{")
+        data = json.loads(separator + document)
+        assert data["totals"]["file_errors"] == 1
+        observed.append(True)
+        row = next(iter(data["files"].values()))
+        data["files"] = {"/foreign/Box_ghp_Probe.php": row}
+        return replace(result, stdout=prefix + json.dumps(data))
+
+    source = '<?php function localValue(): int { return "wrong"; }\n'
+    ctx = context([("owned.php", "php", source)], corrupt_identity)
+    stage = analyze_php_types(ctx)
+    assert observed and stage.status == "failed"
+    assert not stage.findings and not stage.metrics and stage.analyzed_files == 0
+    assert "unrecognized source identity" in stage.reason and "redacted" in stage.reason
+    assert "ghp_Probe" not in stage.reason and "/foreign/" not in stage.reason
+    assert ctx.files[0].path.read_text() == source
 
 
 def test_unknown_notfound_family_is_not_hidden_as_uncertainty(context):
