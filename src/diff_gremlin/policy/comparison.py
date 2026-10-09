@@ -37,6 +37,46 @@ def _finding_key(finding: Finding) -> str:
     )
 
 
+def _blocking_values(stage: StageResult, metric: str) -> list[int | float]:
+    return sorted(
+        (
+            finding.value
+            for finding in stage.findings
+            if finding.metric == metric
+            and finding.value is not None
+            and _complexity_blocker(metric, finding.value)
+        ),
+        reverse=True,
+    )
+
+
+def _blocking_surplus(base: StageResult, head: StageResult) -> list[str]:
+    """Prove aggregate worsening without claiming uncertain function attribution."""
+    if base.status != "ok" or head.status not in {"ok", "limited"}:
+        return []
+    before = sum(finding.severity == "critical" for finding in base.findings)
+    after = sum(finding.severity == "critical" for finding in head.findings)
+    result = (
+        [f"{head.id}: critical observation count increased from {before} to {after}"]
+        if after > before
+        else []
+    )
+    for metric in sorted(COMPLEXITY_MEASURES):
+        old, new = _blocking_values(base, metric), _blocking_values(head, metric)
+        if len(new) > len(old):
+            result.append(
+                f"{head.id}: {metric} blocking observation count increased from {len(old)} to {len(new)}"
+            )
+            continue
+        for rank, value in enumerate(new):
+            if value > old[rank]:
+                result.append(
+                    f"{head.id}: {metric} blocking value at descending rank {rank + 1} increased from {old[rank]:g} to {value:g}"
+                )
+                break
+    return result
+
+
 def _limited_regressions(
     base: StageResult, head: StageResult, delta: dict
 ) -> list[str]:
@@ -79,8 +119,10 @@ def _limited_regressions(
             result.append(
                 f"{head.id}: new/worsened blocking observation {finding.rule}"
             )
-    if base.status == "ok" and head.category == "complexity":
-        result.extend(_metric_regressions(base, head))
+    if base.status == "ok":
+        result.extend(_blocking_surplus(base, head))
+        if head.category == "complexity":
+            result.extend(_metric_regressions(base, head))
     return result
 
 
@@ -204,8 +246,10 @@ def delta_assessment(base: ScanReport, head: ScanReport, deltas: list[dict]) -> 
                 blocking.extend(known)
                 regressions.extend(known)
             continue
-        known = _measurement_regressions(delta) + _metric_regressions(
-            before[stage_id], after[stage_id]
+        known = (
+            _measurement_regressions(delta)
+            + _metric_regressions(before[stage_id], after[stage_id])
+            + _blocking_surplus(before[stage_id], after[stage_id])
         )
         blocking.extend(known)
         regressions.extend(known)

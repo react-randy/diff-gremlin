@@ -304,3 +304,58 @@ def test_partial_new_critical_finding_is_known_only_against_complete_base():
     assert document["delta_assessment"]["decision"] == "hold" and code == 1
     document, code = compared(replace(old, status="limited"), new)
     assert document["delta_assessment"]["decision"] == "unknown" and code == 3
+
+
+@pytest.mark.parametrize("head_status", ["ok", "limited"])
+def test_duplicate_critical_count_increase_is_proven_despite_pairing(head_status):
+    finding = Finding("critical.rule", "Critical evidence", "critical", "a.txt", 1)
+    before = StageResult(
+        "security", "Security", "security", "ok", "fixture", findings=[finding]
+    )
+    after = replace(before, status=head_status, findings=[finding, replace(finding, line=3)])
+    document, code = compared(before, after)
+    assert code == 1 and document["deltas"][0]["ambiguous_identities"]
+    assert any("critical observation count increased from 1 to 2" in x for x in document["delta_assessment"]["blockers"])
+    document, code = compared(replace(before, status="limited"), after)
+    assert code == 3 and not document["delta_assessment"]["blockers"]
+
+
+@pytest.mark.parametrize(
+    "old,new,expected",
+    [
+        ([51, 100], [90], 3),
+        ([52, 52], [52, 52, 52], 1),
+        ([52, 55], [51, 56], 1),
+        ([52, 55], [51, 54], 3),
+        ([52, 55], [55, 52], 0),
+    ],
+)
+def test_aggregate_blocking_values_preserve_descending_dominance(old, new, expected):
+    before = complexity([measured(cc=value) for value in old])
+    after = complexity([measured(cc=value) for value in new])
+    document, code = compared(before, after)
+    assert code == expected
+    assert bool(document["delta_assessment"]["blockers"]) == (expected == 1)
+
+
+def test_aggregate_measures_are_compared_separately():
+    before = complexity(
+        [measured(cc=100), replace(measured(cc=51), metric="shell-ast-decision-complexity-v1")]
+    )
+    after = complexity([replace(measured(cc=90), metric="shell-ast-decision-complexity-v1")])
+    document, code = compared(before, after)
+    assert code == 1
+    assert any("shell-ast-decision-complexity-v1" in x for x in document["delta_assessment"]["blockers"])
+
+
+@pytest.mark.parametrize("incompatible", ["tool", "profile"])
+def test_incompatible_observations_cannot_prove_aggregate_surplus(incompatible):
+    before = report(complexity([measured(), measured()]))
+    after = report(complexity([measured(), measured(), measured()]), "b")
+    if incompatible == "tool":
+        after = replace(after, stages=[replace(after.stages[0], tool="other")])
+    else:
+        after = replace(after, profile="quick")
+    document = compare_document(before, after)
+    assert comparison_exit_code(before, after, document, Gates()) == 3
+    assert not document["delta_assessment"]["blockers"]

@@ -78,6 +78,11 @@ Shell function changes retain the named `shell-ast-decision-complexity-v1`
 estimate. The existing above-50 blocker threshold applies to that measure;
 it is not labelled as exact cyclomatic complexity.
 
+Duplicate identities can prevent attribution or a confirmed resolution. A
+provable increase in critical-observation counts or in the descending distribution
+of blocking complexity values still fails the gate. The receipt describes those
+aggregate facts without assigning the change to an uncertain individual function.
+
 ## Select comparison paths
 
 ```sh

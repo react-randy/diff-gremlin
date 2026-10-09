@@ -104,15 +104,31 @@ def test_native_shell_lexical_owners_and_dotted_names_do_not_collide(tmp_path):
     assert len({finding.fingerprint for finding in result.findings}) == 2
 
 
-def test_native_shell_duplicate_changes_remain_uncertain(tmp_path):
+@pytest.mark.parametrize("last,expected", [(54, 3), (56, 1)])
+def test_native_shell_duplicate_changes_keep_attribution_uncertain(
+    tmp_path, last, expected
+):
     before = stage(
         tmp_path / "base",
         function("inherited", 113) + function("duplicate", 52) + function("duplicate", 55),
     )
     after = stage(
         tmp_path / "head",
-        function("inherited", 113) + function("duplicate", 51) + function("duplicate", 56),
+        function("inherited", 113)
+        + function("duplicate", 51)
+        + function("duplicate", last),
     )
     document, code = compare(before, after)
-    assert code == 3 and document["deltas"][0]["ambiguous_identities"]
-    assert not document["delta_assessment"]["blockers"]
+    assert code == expected and document["deltas"][0]["ambiguous_identities"]
+    assert bool(document["delta_assessment"]["blockers"]) == (expected == 1)
+    assert document["delta_assessment"]["complete"] is False
+
+
+def test_native_shell_additional_duplicate_blocker_is_proven(tmp_path):
+    source = function("inherited", 113) + function("duplicate", 52) * 2
+    before = stage(tmp_path / "base", source)
+    after = stage(tmp_path / "head", source + function("duplicate", 52))
+    document, code = compare(before, after)
+    assert before.metrics["max_cc"] == after.metrics["max_cc"] == 113
+    assert code == 1 and document["deltas"][0]["ambiguous_identities"]
+    assert any("count increased from 3 to 4" in x for x in document["delta_assessment"]["blockers"])
