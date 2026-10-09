@@ -52,9 +52,10 @@ def diagnostic_message(value: object) -> str:
     text = re.sub(r"(?<![A-Za-z0-9_@.-])(?:[A-Za-z]:[\\/]|/)[^\s'\"`]+", "[path]", text)
     text = re.sub(r"\b[A-Za-z0-9_=-]{24,}\b", "[redacted]", text)
     text = re.sub(
-        r"\b(?:gh[pousr]_[A-Za-z0-9_]+|github_pat_[A-Za-z0-9_]+|sk[-_][A-Za-z0-9_-]+|AKIA[A-Z0-9]+)\b",
+        r"(?:\b|_)(?:gh[pousr]_|github_pat_|sk[-_]|AKIA)[A-Za-z0-9_-]*",
         "[redacted]",
         text,
+        flags=re.IGNORECASE,
     )
     quoted_parts = list(_QUOTED.finditer(text))
     if _unsafe_quoting(text, quoted_parts):

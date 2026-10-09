@@ -245,6 +245,50 @@ def test_unsafe_quoting_withholds_whole_message(message):
     )
 
 
+@pytest.mark.parametrize(
+    "name",
+    [
+        "Box_ghp_Probe",
+        "Box_sk_Probe",
+        "GHP_Probe",
+        "GhP_Probe",
+        "Box_AKIAProbe",
+        "ns.ghu_Probe",
+        "Box$gho_Probe",
+        "Box_github_pat_Probe",
+        "Box_ghs_Probe",
+        "Box_ghr_Probe",
+    ],
+)
+@pytest.mark.parametrize(
+    "template",
+    [
+        "Property 'missing' does not exist on type '{name}'.",
+        "Property '{name}' does not exist on type 'ExampleType'.",
+    ],
+)
+def test_credential_prefix_boundaries_and_case_are_withheld(name, template):
+    message = diagnostic_message(template.format(name=name))
+    assert name not in message and "redacted" in message
+
+
+def test_native_credential_shaped_receiver_counts_survive_without_names(context):
+    names = ("Box_ghp_Probe", "Box_sk_Probe", "GHP_Probe", "GhP_Probe", "Box_AKIAProbe")
+    source = "\n".join(
+        f"class {name} {{ present = 1; }}\n(new {name}()).missing;" for name in names
+    )
+    ctx = context([("receivers.ts", "typescript", source)], run)
+    stage = analyze_ts_types(ctx)
+    assert stage.status == "ok", stage.reason
+    assert stage.metrics["source_error_count"] == len(names)
+    assert stage.metrics["error_count"] == len(names)
+    assert stage.metrics["environment_count"] == 0
+    assert len(stage.findings) == len(names)
+    assert all(f.rule == "TS2339" and "redacted" in f.message for f in stage.findings)
+    assert not any(name in f.message for name in names for f in stage.findings)
+    assert ctx.files[0].path.read_text() == source
+
+
 def test_input_and_output_are_bounded():
     message = diagnostic_message("safe " * 1000 + "'unbalanced private")
     assert len(message) == 512 and "private" not in message
