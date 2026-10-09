@@ -2,10 +2,12 @@
 
 import json
 import re
+from collections import Counter
 from pathlib import Path
 
 from diff_gremlin.analyzers.javascript.output import natural, positive
 from diff_gremlin.analyzers.php.type_identity import LEVEL
+from diff_gremlin.analyzers.php.type_messages import diagnostic_message
 from diff_gremlin.domain.context import SourceFile
 from diff_gremlin.domain.findings import Finding
 from diff_gremlin.runtime.environment import redact
@@ -55,6 +57,10 @@ UNRESOLVED = frozenset(
         "interface.notFound",
         "trait.notFound",
         "function.notFound",
+        "property.notFound",
+        "method.notFound",
+        "staticMethod.notFound",
+        "attribute.notFound",
         "return.unresolvableType",
         "parameter.unresolvableType",
         "property.unresolvableType",
@@ -81,9 +87,15 @@ def diagnostic(item: object, file: SourceFile, lines: int) -> Finding:
         item.get("ignorable"), bool
     ):
         raise TypeError("PHPStan diagnostic schema differs")
+    context = diagnostic_message(item["message"])
+    message = (
+        f"PHPStan {identifier}: {context} (snapshot level {LEVEL})"
+        if context
+        else f"PHPStan {identifier} diagnostic (snapshot level {LEVEL})"
+    )
     return Finding(
         "phpstan." + identifier,
-        f"PHPStan {identifier} diagnostic (snapshot level {LEVEL})",
+        message,
         "low" if identifier in UNRESOLVED else "medium",
         file.relative_path,
         line,
@@ -97,7 +109,12 @@ def _output_rows(text: str) -> tuple[dict, dict]:
     totals, rows, errors = data["totals"], data.get("files"), data.get("errors")
     if not isinstance(rows, dict) or not isinstance(errors, list):
         raise TypeError("PHPStan output has no file diagnostics or global errors")
-    if errors or totals.get("errors") != 0 or not natural(totals.get("file_errors")):
+    if (
+        errors
+        or not natural(totals.get("errors"))
+        or totals["errors"] != 0
+        or not natural(totals.get("file_errors"))
+    ):
         raise ValueError("PHPStan reported global analysis failures")
     return totals, rows
 
@@ -137,7 +154,12 @@ def diagnostics(
         for name, value in rows.items()
         for finding in _source_findings(name, value, locations)
     ]
-    if totals["file_errors"] != len(findings) or (returncode == 1) != bool(findings):
+    if (
+        not natural(returncode)
+        or returncode not in (0, 1)
+        or totals["file_errors"] != len(findings)
+        or (returncode == 1) != bool(findings)
+    ):
         raise ValueError(
             "PHPStan totals or exit code disagree with located diagnostics"
         )
@@ -158,17 +180,74 @@ def debug_document(text: str, locations: dict[Path, SourceFile]) -> str:
 
 
 def type_metrics(findings: list[Finding], unresolved: int) -> dict:
-    """Separate unavailable include paths from undefined snapshot symbols."""
+    """Preserve admitted native totals independently of displayed aggregation."""
     includes = sum(
         f.rule in {"phpstan.require.fileNotFound", "phpstan.include.fileNotFound"}
         for f in findings
     )
+    known = UNRESOLVED | {"return.type", "argument.type", "property.type"}
+    rules = Counter(
+        identifier if identifier in known else "other"
+        for finding in findings
+        for identifier in (finding.rule.removeprefix("phpstan."),)
+    )
     return {
         "error_count": len(findings) - unresolved,
         "warning_count": unresolved,
+        "native_diagnostic_count": len(findings),
+        "native_rule_counts": dict(sorted(rules.items())),
         "unresolved_symbols": unresolved - includes,
         "unresolved_includes": includes,
         "level": LEVEL,
         "dependency_resolution": "source-only-static-reflection-no-vendor",
         "target_execution": False,
     }
+
+
+def _unresolved_summary(rule: str, group: list[Finding]) -> Finding:
+    examples = list(
+        dict.fromkeys(
+            context
+            for finding in group
+            if ": " in finding.message
+            for context in (
+                finding.message.split(": ", 1)[1].removesuffix(
+                    f" (snapshot level {LEVEL})"
+                ),
+            )
+            if len(context) <= 120
+        )
+    )[:2]
+    message = (
+        f"PHPStan {rule.removeprefix('phpstan.')}: {len(group)} unresolved references; "
+        "may reflect unavailable dependencies or local errors "
+        f"(snapshot level {LEVEL})"
+    )
+    if examples:
+        message += "; examples: " + " | ".join(examples)
+    return Finding(
+        rule,
+        message,
+        "low",
+        confidence="low",
+        metric="unresolved_reference_count",
+        value=len(group),
+    )
+
+
+def display_findings(findings: list[Finding]) -> list[Finding]:
+    """Group admitted unresolved references without claiming a shared location."""
+    groups: dict[str, list[Finding]] = {}
+    for finding in findings:
+        if finding.rule.removeprefix("phpstan.") in UNRESOLVED:
+            groups.setdefault(finding.rule, []).append(finding)
+    displayed = []
+    emitted = set()
+    for finding in findings:
+        group = groups.get(finding.rule)
+        if group is None or len(group) == 1:
+            displayed.append(finding)
+        elif finding.rule not in emitted:
+            displayed.append(_unresolved_summary(finding.rule, group))
+            emitted.add(finding.rule)
+    return displayed

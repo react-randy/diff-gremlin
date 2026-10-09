@@ -6,7 +6,7 @@ from pathlib import Path
 
 from diff_gremlin.analyzers.javascript.installed import trusted_executable
 from diff_gremlin.analyzers.php.type_identity import VERSION
-from diff_gremlin.analyzers.php.type_output import type_metrics
+from diff_gremlin.analyzers.php.type_output import display_findings, type_metrics
 from diff_gremlin.analyzers.php.type_runtime import TypeInvocationError, native_evidence
 from diff_gremlin.analyzers.php.type_workspace import (
     configuration,
@@ -59,9 +59,9 @@ def analyze_php_types(ctx: ScanContext) -> StageResult:
         "phpstan",
         VERSION,
         metrics=type_metrics(findings, unresolved),
-        findings=findings,
+        findings=display_findings(findings),
         reason=(
-            "Snapshot symbols/paths are unresolved; framework/vendor dependencies and original include paths are unavailable"
+            "Snapshot references are unresolved; they may reflect unavailable framework/vendor dependencies, original include paths or local errors"
             if unresolved
             else "Reduced snapshot level 5; no vendor, framework extensions or application bootstrap"
         ),
