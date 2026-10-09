@@ -51,6 +51,21 @@ JavaScript/PHP clones, and history are visibly omitted. Repo checks default to *
 Quick results describe their selected checks. They are not a full assessment.
 Reviews compare exact pinned provider base/head commits; this is not a simulated merge.
 
+**On main, awaiting the next release:** comparisons have their own delta verdict.
+Unchanged inherited blockers remain in the snapshot receipts; the default compare
+gate fails for new or worsened blockers. Moved functions keep their identity and
+changed complexity appears with before/after values. Compact receipts and partial
+path selection are available from the current source:
+
+```sh
+diff-gremlin compare . main HEAD --format json-delta
+diff-gremlin compare . main HEAD --changed-paths --paths app --format markdown
+```
+
+Selected paths are explicitly partial and retain exit 3 for missing evidence.
+Progress appears on stderr; `--quiet` suppresses it. The published 1.1.0 wheel and
+image retain their released behavior. [Comparison semantics →](docs/usage.md#comparison-verdicts)
+
 Read added findings, changed signals, and coverage before deciding what to review
 or fix. Removed findings are only reported as resolved when both relevant checks
 completed. [Usage and private repositories →](docs/usage.md)
@@ -110,6 +125,9 @@ diff-gremlin check . --fail-under 80 --fail-on high --require-complete --format 
 | `1` | Known blocker or configured gate failed |
 | `2` | Usage, acquisition, or operational error |
 | `3` | Required evidence incomplete |
+
+For unreleased comparisons on main, default exit 1 means a demonstrated new or
+worsened blocker; explicit score/severity gates still evaluate the head snapshot.
 
 A scan keeps useful results when a check cannot finish. An **observed score** uses
 validated checks and shows measured category weight, partial categories, and

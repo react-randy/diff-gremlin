@@ -2,6 +2,7 @@
 
 import tempfile
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 from diff_gremlin.domain.context import ScanContext
@@ -37,6 +38,16 @@ def history_stage(snapshot: Snapshot, context: ScanContext) -> StageResult:
     from diff_gremlin.analyzers.history import analyze_history
     from diff_gremlin.analyzers.status import unavailable
 
+    if getattr(snapshot, "selection", None) is not None:
+        return unavailable(
+            "history.git",
+            "Python complexity history",
+            "history",
+            "git",
+            required=False,
+            reason="Repository history is outside this selected-path scan",
+            status="unsupported",
+        )
     if snapshot.history_repo is None:
         return unavailable(
             "history.git",
@@ -55,7 +66,11 @@ def history_stage(snapshot: Snapshot, context: ScanContext) -> StageResult:
 
 
 def scan(
-    snapshot: Snapshot, *, profile: str = "full", timeout: float = 120.0
+    snapshot: Snapshot,
+    *,
+    profile: str = "full",
+    timeout: float = 120.0,
+    progress: Callable[[StageResult], None] | None = None,
 ) -> ScanReport:
     from diff_gremlin.inventory import collect_inventory
     from diff_gremlin.process import run
@@ -64,6 +79,23 @@ def scan(
     inventory = collect_inventory(snapshot.root, snapshot.scope_manifest)
     selected = capabilities(inventory.languages)
     stages = [inventory.stage]
+    selection = getattr(snapshot, "selection", None)
+    if selection is not None:
+        stages.append(
+            StageResult(
+                "scope.selection",
+                "Selected source paths",
+                "structure",
+                "limited",
+                "builtin",
+                metrics=selection,
+                reason="Only selected paths were scanned; repository evidence is partial",
+                scope="selected-paths",
+            )
+        )
+    if progress is not None:
+        for stage in stages:
+            progress(stage)
     with tempfile.TemporaryDirectory(prefix="diff-gremlin-analysis-") as directory:
         context = ScanContext(
             snapshot.root,
@@ -78,9 +110,16 @@ def scan(
         )
         for capability in selected:
             if profile == "full" or not capability.full_only:
-                stages.extend(invoke(capability, context))
+                results = invoke(capability, context)
+                stages.extend(results)
+                if progress is not None:
+                    for result in results:
+                        progress(result)
         if profile == "full":
-            stages.append(history_stage(snapshot, context))
+            history = history_stage(snapshot, context)
+            stages.append(history)
+            if progress is not None:
+                progress(history)
     return ScanReport(
         snapshot.identity,
         profile,
@@ -89,4 +128,5 @@ def scan(
         assess(stages),
         time.monotonic() - started,
         omitted_ids(selected, profile),
+        selection,
     )

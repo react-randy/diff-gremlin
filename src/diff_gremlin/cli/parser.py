@@ -21,7 +21,7 @@ def positive_seconds(value: str) -> float:
     return parsed
 
 
-def common_options(parser, *, profile="full"):
+def common_options(parser, *, profile="full", comparison=False):
     parser.add_argument(
         "--profile",
         choices=("quick", "full"),
@@ -30,9 +30,15 @@ def common_options(parser, *, profile="full"):
     )
     parser.add_argument(
         "--format",
-        choices=("text", "markdown", "json"),
+        choices=("text", "markdown", "json", "json-delta")
+        if comparison
+        else ("text", "markdown", "json"),
         default="text",
-        help="text/markdown show top findings; JSON contains every finding and scope path",
+        help="text/markdown show top findings; json contains complete receipts"
+        + ("; json-delta omits snapshot arrays" if comparison else ""),
+    )
+    parser.add_argument(
+        "--quiet", action="store_true", help="suppress stage progress on stderr"
     )
     parser.add_argument(
         "--timeout",
@@ -56,6 +62,21 @@ def common_options(parser, *, profile="full"):
         "--require-complete",
         action="store_true",
         help="make complete-evidence intent explicit; incomplete already exits 3",
+    )
+
+
+def comparison_options(command) -> None:
+    command.add_argument(
+        "--paths",
+        action="append",
+        default=[],
+        metavar="PATH",
+        help="scan only this literal repository-relative file/subtree (repeatable); marks evidence partial",
+    )
+    command.add_argument(
+        "--changed-paths",
+        action="store_true",
+        help="scan only paths changed between supplied refs; intersects --paths; marks evidence partial",
     )
 
 
@@ -86,14 +107,16 @@ def parser() -> argparse.ArgumentParser:
         "pr", help="compare immutable GitHub PR or GitLab MR snapshots"
     )
     pr.add_argument("url", help="GitHub /pull/N or GitLab /-/merge_requests/N URL")
-    common_options(pr, profile="quick")
+    common_options(pr, profile="quick", comparison=True)
+    comparison_options(pr)
     compare = commands.add_parser(
         "compare", help="compare two refs without changing your checkout"
     )
     compare.add_argument("target", help="local Git folder or repository HTTPS URL")
     compare.add_argument("base", help="base ref or full SHA")
     compare.add_argument("head", help="head ref or full SHA")
-    common_options(compare)
+    common_options(compare, comparison=True)
+    comparison_options(compare)
     doctor = commands.add_parser(
         "doctor",
         help="show installed capabilities and actionable missing-tool guidance",

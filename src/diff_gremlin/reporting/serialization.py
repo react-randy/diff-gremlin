@@ -9,7 +9,7 @@ from diff_gremlin.policy.metrics import stage_score
 from diff_gremlin.policy.thresholds import POLICY_VERSION
 from diff_gremlin.reporting.advice import next_actions
 
-SCHEMA_VERSION = "1.1.0"
+SCHEMA_VERSION = "1.2.0"
 
 
 def stage_document(stage):
@@ -33,6 +33,7 @@ def report_document(report: ScanReport) -> dict:
             "omitted_stages": list(report.omitted_stages),
             "scope": "production static evidence; security and hygiene inspect inventoried text",
         },
+        "source_selection": report.source_selection,
         "stages": [stage_document(stage) for stage in report.stages],
         "next_actions": next_actions(report),
         "duration_seconds": round(report.duration_seconds, 3),

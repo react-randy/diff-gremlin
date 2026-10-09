@@ -42,6 +42,17 @@ def finding_lines(document: dict, *, rich: bool) -> list[str]:
 def identity_lines(document: dict, *, rich: bool) -> list[str]:
     safe: Callable[[object], str] = escape if rich else plain
     lines = ["# Diff Gremlin comparison" if rich else "Diff Gremlin comparison", ""]
+    assessment = document.get("delta_assessment")
+    if assessment is not None:
+        lines.extend(
+            [
+                f"Delta decision: {safe(assessment['decision'])}",
+                "Comparison evidence: "
+                + ("complete" if assessment["complete"] else "incomplete; inspect gaps"),
+            ]
+        )
+        lines.extend("- " + safe(reason) for reason in assessment["blockers"])
+        lines.append("")
     for side in ("base", "head"):
         receipt = document[side]
         lines.extend(
@@ -52,6 +63,33 @@ def identity_lines(document: dict, *, rich: bool) -> list[str]:
             ]
         )
     return [*lines, safe(document["comparison_semantics"]), ""]
+
+
+def changed_lines(document: dict, *, rich: bool) -> list[str]:
+    safe = escape if rich else plain
+    changes = [
+        (delta["id"], change)
+        for delta in document["deltas"]
+        for change in delta.get("changed_findings", [])
+    ]
+    if not changes:
+        return []
+    lines = ["## Changed observations" if rich else "Changed observations", ""]
+    for stage, change in changes[:FINDING_LIMIT]:
+        finding = change["head"]
+        location = f"{finding['path']}:{finding['line']}:{finding['column']}"
+        measurement = change.get("measurement")
+        detail = (
+            f"{measurement['metric']}: {measurement['base']} → {measurement['head']}"
+            if measurement is not None
+            else change["direction"]
+        )
+        lines.append(
+            f"- {safe(location)} · {safe(stage)} · {safe(finding['symbol'] or finding['rule'])} — {safe(detail)}"
+        )
+    if note := truncation_note(len(changes), FINDING_LIMIT, "changed observations"):
+        lines.append(note)
+    return [*lines, ""]
 
 
 def evidence_lines(document: dict, *, rich: bool) -> list[str]:
@@ -80,6 +118,7 @@ def render(document: dict, head: ScanReport, *, format: str) -> str:
     rich = format == "markdown"
     safe = escape if rich else plain
     lines = identity_lines(document, rich=rich) + evidence_lines(document, rich=rich)
+    lines += changed_lines(document, rich=rich)
     lines += finding_lines(document, rich=rich)
     notes = summary.resolution_notes(document)
     if notes:
