@@ -20,6 +20,9 @@ from diff_gremlin.domain.context import ScanContext
 from diff_gremlin.domain.stages import StageResult
 
 _ID, _LABEL = "typescript.types.tsc", "TypeScript static types"
+_ENVIRONMENT_RULES = frozenset(
+    {"TS2307", "TS2688", "TS2792", "TS7016", "TS6059", "TS6307", "TS7026", "TS2875"}
+)
 
 
 def _diagnostics(stdout, files):
@@ -34,13 +37,30 @@ def _diagnostics(stdout, files):
         )
     ):
         raise ValueError("invalid diagnostic counts")
-    findings = located_findings(data["findings"], files, kind="typescript")
+    findings = located_findings(
+        data["findings"], files, kind="typescript", native_messages=True
+    )
     if (
         len(findings) + data["global_count"]
         != data["error_count"] + data["warning_count"]
     ):
         raise ValueError("incomplete diagnostic counts")
-    return data, findings
+    environment = [
+        finding for finding in findings if finding.rule in _ENVIRONMENT_RULES
+    ]
+    source = [finding for finding in findings if finding.rule not in _ENVIRONMENT_RULES]
+    data["environment_count"] = len(environment) + data["global_count"]
+    data["environment_diagnostics"] = {
+        rule: sum(finding.rule == rule for finding in environment)
+        for rule in sorted({finding.rule for finding in environment})
+    }
+    data["environment_examples"] = {
+        rule: next(finding.message for finding in environment if finding.rule == rule)
+        for rule in data["environment_diagnostics"]
+    }
+    data["source_error_count"] = sum(finding.severity == "medium" for finding in source)
+    data["source_warning_count"] = len(source) - data["source_error_count"]
+    return data, source
 
 
 def _type_environment(ctx):
@@ -52,12 +72,35 @@ def _type_environment(ctx):
 def _type_metrics(data):
     return {
         key: data[key]
-        for key in ("error_count", "warning_count", "dependency_count", "global_count")
+        for key in (
+            "error_count",
+            "warning_count",
+            "dependency_count",
+            "global_count",
+            "environment_count",
+            "environment_diagnostics",
+            "environment_examples",
+            "source_error_count",
+            "source_warning_count",
+        )
     }
 
 
 def _type_limit(data):
-    return data["dependency_count"] > 0 or data["global_count"] > 0
+    return data["dependency_count"] > 0 or data["environment_count"] > 0
+
+
+def _type_reason(data):
+    if not _type_limit(data):
+        return (
+            "Fixed static options; project configuration and implicit imports excluded"
+        )
+    counts = ", ".join(
+        f"{rule}: {count}" for rule, count in data["environment_diagnostics"].items()
+    )
+    if data["global_count"]:
+        counts = ", ".join(filter(None, (counts, f"global: {data['global_count']}")))
+    return f"Fixed static options; dependency/JSX environment diagnostics aggregated ({counts}); semantics remain limited"
 
 
 def analyze_ts_types(ctx: ScanContext) -> StageResult:
@@ -106,9 +149,7 @@ def analyze_ts_types(ctx: ScanContext) -> StageResult:
         package_version(package),
         metrics=_type_metrics(data),
         findings=findings,
-        reason="Fixed static options; unresolved dependencies/global diagnostics limit semantics"
-        if limited
-        else "Fixed static options; project configuration and implicit imports excluded",
+        reason=_type_reason(data),
         scope="standalone-static",
         eligible_files=len(files),
         analyzed_files=len(files),

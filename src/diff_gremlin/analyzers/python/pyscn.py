@@ -98,14 +98,15 @@ def _component_stages(
     ):
         try:
             metrics, findings = parser()
-        except (ValueError, TypeError):
+        except (ValueError, TypeError) as error:
             stages.append(
                 unavailable(
                     stage_id,
                     label,
                     category,
                     "pyscn",
-                    "PyScn component failed schema or result validation",
+                    "PyScn component failed schema or result validation: "
+                    + str(error)[:200],
                     status="failed",
                     eligible_files=len(files),
                     required=required,

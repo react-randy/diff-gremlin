@@ -1,6 +1,8 @@
 """Validate evidence emitted by controlled analysis drivers."""
 
 import json
+import re
+import unicodedata
 from typing import TypeGuard
 
 from diff_gremlin.analyzers.javascript.coordinates import (
@@ -11,6 +13,77 @@ from diff_gremlin.domain.context import SourceFile
 from diff_gremlin.domain.findings import Finding
 from diff_gremlin.domain.process import RunResult
 from diff_gremlin.domain.stages import StageStatus
+from diff_gremlin.runtime.environment import redact
+
+_QUOTED = re.compile(r"'[^']*'|\"[^\"]*\"|`[^`]*`")
+_IDENTIFIER = re.compile(r"[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*\Z")
+_NAME_CONTEXT = re.compile(
+    r"(?:[Pp]arameter|[Pp]roperty|[Nn]ame|[Mm]odule|[Nn]amespace|[Mm]ember|[Cc]lass|[Ii]nterface) $"
+)
+_MODULE = re.compile(r"(?:@[a-zA-Z0-9_-]+/)?[a-zA-Z0-9_.-]+(?:/[a-zA-Z0-9_.-]+)*\Z")
+_PRIMITIVES = frozenset(
+    {
+        "string",
+        "number",
+        "boolean",
+        "bigint",
+        "symbol",
+        "object",
+        "any",
+        "unknown",
+        "never",
+        "void",
+        "undefined",
+        "null",
+    }
+)
+
+
+def diagnostic_message(value: object) -> str:
+    """Retain compiler prose and safe name contexts without publishing literals."""
+    if not isinstance(value, str) or not value:
+        raise ValueError("missing native diagnostic message")
+    # Bound work before looking at untrusted source fragments. Credential and
+    # path filtering precede the bounded, single-line presentation surface.
+    text = redact(value[:4096])
+    text = re.sub(r"(?<![A-Za-z0-9_@.-])(?:[A-Za-z]:[\\/]|/)[^\s'\"`]+", "[path]", text)
+    text = re.sub(r"\b[A-Za-z0-9_=-]{24,}\b", "[redacted]", text)
+    text = re.sub(
+        r"\b(?:gh[pousr]_[A-Za-z0-9_]+|github_pat_[A-Za-z0-9_]+|sk[-_][A-Za-z0-9_-]+|AKIA[A-Z0-9]+)\b",
+        "[redacted]",
+        text,
+    )
+    quoted_parts = list(_QUOTED.finditer(text))
+    remainder = _QUOTED.sub("", text)
+    if any(char in remainder for char in "'\"`") or any(
+        any(char in match.group()[1:-1] for char in "'\"`") for match in quoted_parts
+    ):
+        return "Native diagnostic text withheld because quoting was unsafe"
+
+    def quoted(match: re.Match[str]) -> str:
+        content = match.group()[1:-1]
+        prefix = text[: match.start()]
+        name = (
+            bool(_NAME_CONTEXT.search(prefix))
+            and bool(_IDENTIFIER.fullmatch(content))
+            and len(content) <= 80
+        )
+        module = (
+            prefix.endswith("module ")
+            and bool(_MODULE.fullmatch(content))
+            and len(content) <= 100
+        )
+        primitive = content in _PRIMITIVES
+        return match.group() if name or module or primitive else "'[redacted]'"
+
+    text = _QUOTED.sub(quoted, text)
+    # Compiler prose does not need markup. Remove raw quote remnants (including
+    # unmatched attacker quotes), controls, bidi formatting and Markdown syntax.
+    text = "".join(
+        " " if unicodedata.category(char).startswith("C") else char for char in text
+    )
+    text = re.sub(r"([<>\[\]`*_#|\\])", r"\\\1", text)
+    return " ".join(text.split())[:512]
 
 
 def natural(value: object) -> TypeGuard[int]:
@@ -47,6 +120,7 @@ def _located_row(
     paths: dict[str, str],
     coordinates: SourceCoordinates,
     kind: CoordinateKind,
+    native_messages: bool,
 ) -> Finding:
     if not isinstance(row, dict) or row.get("path") not in paths:
         raise ValueError("finding path outside requested inventory")
@@ -63,7 +137,9 @@ def _located_row(
     coordinates.validate(row["path"], row["line"], row["column"], native_kind)
     return Finding(
         rule=rule,
-        message=f"Review {rule} diagnostic",
+        message=diagnostic_message(row.get("message"))
+        if native_messages
+        else f"Review {rule} diagnostic",
         severity=severity,
         path=paths[row["path"]],
         line=row["line"],
@@ -72,9 +148,15 @@ def _located_row(
 
 
 def located_findings(
-    rows: list, files: tuple[SourceFile, ...], *, kind: CoordinateKind = "javascript"
+    rows: list,
+    files: tuple[SourceFile, ...],
+    *,
+    kind: CoordinateKind = "javascript",
+    native_messages: bool = False,
 ) -> list[Finding]:
-    """Use generated messages because source diagnostics may contain credentials."""
+    """Default to generated messages; explicitly requested native text is sanitized."""
     paths = {str(file.path.resolve()): file.relative_path for file in files}
     coordinates = SourceCoordinates(files)
-    return [_located_row(row, paths, coordinates, kind) for row in rows]
+    return [
+        _located_row(row, paths, coordinates, kind, native_messages) for row in rows
+    ]
