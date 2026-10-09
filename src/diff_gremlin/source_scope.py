@@ -104,12 +104,76 @@ def _media_container(content: bytes) -> str:
     return ""
 
 
+def _icon_image(content: bytes, width: int, height: int) -> bool:
+    """Validate a PNG header or the complete minimum uncompressed icon bitmap."""
+    if content.startswith(b"\x89PNG\r\n\x1a\n"):
+        return (
+            len(content) >= 33
+            and content[8:16] == b"\x00\x00\x00\rIHDR"
+            and int.from_bytes(content[16:20], "big") == width
+            and int.from_bytes(content[20:24], "big") == height
+            and content.endswith(b"\x00\x00\x00\x00IEND\xaeB`\x82")
+        )
+    if len(content) < 40:
+        return False
+    header = int.from_bytes(content[:4], "little")
+    bits = int.from_bytes(content[14:16], "little")
+    colors = int.from_bytes(content[32:36], "little")
+    if (
+        header not in {40, 108, 124}
+        or len(content) < header
+        or int.from_bytes(content[4:8], "little", signed=True) != width
+        or int.from_bytes(content[8:12], "little", signed=True) != height * 2
+        or content[12:14] != b"\x01\x00"
+        or bits not in {1, 4, 8, 16, 24, 32}
+        or content[16:20] != b"\x00\x00\x00\x00"
+        or colors > (1 << bits if bits <= 8 else 0)
+    ):
+        return False
+    palette = (colors or 1 << bits) * 4 if bits <= 8 else 0
+    pixels = ((width * bits + 31) // 32) * 4 * height
+    mask = ((width + 31) // 32) * 4 * height
+    return len(content) == header + palette + pixels + mask
+
+
+def _icon_container(content: bytes) -> bool:
+    """Require a complete ICO directory and recognized, bounded image payloads."""
+    if len(content) < 6 or content[:4] != b"\x00\x00\x01\x00":
+        return False
+    count = int.from_bytes(content[4:6], "little")
+    boundary = 6 + 16 * count
+    if not count or count > 256 or boundary > len(content):
+        return False
+    ranges = []
+    for index in range(count):
+        entry = content[6 + 16 * index : 22 + 16 * index]
+        size = int.from_bytes(entry[8:12], "little")
+        start = int.from_bytes(entry[12:16], "little")
+        end = start + size
+        if (
+            entry[3] != 0
+            or not size
+            or start < boundary
+            or end > len(content)
+            or not _icon_image(content[start:end], entry[0] or 256, entry[1] or 256)
+        ):
+            return False
+        ranges.append((start, end))
+    for start, end in sorted(ranges):
+        if start != boundary:
+            return False
+        boundary = end
+    return boundary == len(content)
+
+
 def classify_content(path: str, content: bytes) -> tuple[str, str]:
     """Return text, binary-asset, or possible-source from content evidence."""
     if _is_text(content):
         return "text", "UTF-8 text"
     if PurePosixPath(path).suffix.lower() in SOURCE_SUFFIXES:
         return "possible-source", "Source/text filename contains non-UTF-8 or NUL bytes"
+    if _icon_container(content):
+        return "binary-asset", "ICO image; contents not expanded or analyzed"
     if reason := _media_container(content):
         return "binary-asset", reason
     for signature, kind in SIGNATURES:

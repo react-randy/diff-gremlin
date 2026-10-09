@@ -8,6 +8,7 @@ from diff_gremlin.acquisition.materialize import write_entry
 from diff_gremlin.acquisition.object_store import MAX_HISTORY_BYTES, copy_object_store
 from diff_gremlin.acquisition.paths import safe_link, safe_path
 from diff_gremlin.acquisition.scope import content_scope
+from diff_gremlin.acquisition.selection import PathSelection
 from diff_gremlin.acquisition.tree import TreeEntry, tree_entries
 from diff_gremlin.domain.sources import SourceScopeEntry
 from diff_gremlin.inventory import MAX_FILE_BYTES, MAX_TREE_BYTES
@@ -47,15 +48,21 @@ def extract_tree(
     destination: Path,
     *,
     scope_manifest: list[SourceScopeEntry] | None = None,
+    selection: PathSelection | None = None,
+    selection_counts: dict | None = None,
 ) -> tuple[TreeEntry, ...]:
     destination.mkdir()
-    entries = tree_entries(git, repo, commit)
+    entries = tree_entries(
+        git, repo, commit, selection=selection, selection_counts=selection_counts
+    )
     for entry, content in _blob_batches(
         git, repo, _selected_entries(entries, scope_manifest)
     ):
         if entry.mode == "120000":
             safe_link(entry.path, content.decode("utf-8", "surrogateescape"))
-        if not in_scope(entry.path):
+        if not in_scope(entry.path) or (
+            selection is not None and not selection.includes(entry.path)
+        ):
             continue
         if entry.mode != "120000" and scope_manifest is not None:
             omission = content_scope(entry.path, content, entry.size, MAX_FILE_BYTES)

@@ -4,6 +4,13 @@ import tempfile
 from contextlib import contextmanager
 from pathlib import Path
 
+from diff_gremlin.acquisition.changes import (
+    changed_lines,
+    comparison_history,
+)
+from diff_gremlin.acquisition.changes import (
+    changed_paths as comparison_changed_paths,
+)
 from diff_gremlin.acquisition.git import Git, remote_url
 from diff_gremlin.acquisition.objects import extract_tree, tree_entries
 from diff_gremlin.acquisition.repositories import (
@@ -13,6 +20,7 @@ from diff_gremlin.acquisition.repositories import (
     remote_history,
     verify_sha,
 )
+from diff_gremlin.acquisition.selection import PathSelection, normalize_paths
 from diff_gremlin.acquisition.working import copy_working_tree, working_tree_dirty
 from diff_gremlin.domain.sources import (
     ReviewTarget,
@@ -43,16 +51,31 @@ def _identity(target: str, commit: str, date: str, mode: str, dirty: bool = Fals
 
 
 def _ref_snapshot(
-    git: Git, history: Path, commit: str, target: str, destination: Path
+    git: Git,
+    history: Path,
+    commit: str,
+    target: str,
+    destination: Path,
+    selection: PathSelection | None = None,
 ) -> Snapshot:
     pin_history(git, history, commit)
     scope_manifest = []
-    extract_tree(git, history, commit, destination, scope_manifest=scope_manifest)
+    counts = {}
+    extract_tree(
+        git,
+        history,
+        commit,
+        destination,
+        scope_manifest=scope_manifest,
+        selection=selection,
+        selection_counts=counts,
+    )
     return Snapshot(
         destination,
         _identity(target, commit, git.date(history, commit), "commit"),
         history,
         tuple(sorted(scope_manifest, key=lambda row: row.relative_path)),
+        selection.receipt(counts["total"], counts["selected"]) if selection else None,
     )
 
 
@@ -127,9 +150,9 @@ def acquire_source(target: str, *, ref: str | None = None, timeout: float = 120.
             yield _local_source(git, target, ref, workspace)
 
 
-def _review_side(
+def _review_history(
     git: Git, review: ReviewTarget, side: str, workspace: Path
-) -> Snapshot:
+) -> tuple[Path, str, str]:
     expected = review.base_sha if side == "base" else review.head_sha
     url = review.base_repo_url if side == "base" else review.head_repo_url
     verify_sha(expected)
@@ -150,7 +173,7 @@ def _review_side(
             fallback_ref,
             review.base_repo_url,
         )
-    return _ref_snapshot(git, history, commit, url, workspace / side)
+    return history, commit, url
 
 
 @contextmanager
@@ -161,14 +184,21 @@ def acquire_comparison(
     *,
     review: ReviewTarget | None = None,
     timeout: float = 120.0,
+    paths: tuple[str, ...] = (),
+    changed_paths: bool = False,
 ):
     """Compare exact provider base/head objects or explicitly named local/remote refs."""
     git = Git(timeout)
+    prefixes = normalize_paths(paths)
     with tempfile.TemporaryDirectory(prefix="diff-gremlin-comparison-") as directory:
         workspace = Path(directory)
         if review:
-            before = _review_side(git, review, "base", workspace)
-            after = _review_side(git, review, "head", workspace)
+            before_history, before_sha, before_target = _review_history(
+                git, review, "base", workspace
+            )
+            after_history, after_sha, after_target = _review_history(
+                git, review, "head", workspace
+            )
         elif remote_url(target):
             before_history, before_sha = remote_history(
                 git, target, base, workspace / "base.git"
@@ -176,12 +206,7 @@ def acquire_comparison(
             after_history, after_sha = remote_history(
                 git, target, head, workspace / "head.git"
             )
-            before = _ref_snapshot(
-                git, before_history, before_sha, target, workspace / "base"
-            )
-            after = _ref_snapshot(
-                git, after_history, after_sha, target, workspace / "head"
-            )
+            before_target = after_target = target
         else:
             source = _local_path(target)
             before_sha, after_sha = git.resolve(source, base), git.resolve(source, head)
@@ -192,10 +217,32 @@ def acquire_comparison(
             after_history = history_view(
                 git, history, workspace / "head.git", after_sha
             )
-            before = _ref_snapshot(
-                git, before_history, before_sha, str(source), workspace / "base"
+            before_target = after_target = str(source)
+        metadata_history = comparison_history(
+            git, before_history, after_history, workspace / "comparison.git"
+        )
+        changed = (
+            frozenset(
+                comparison_changed_paths(git, metadata_history, before_sha, after_sha)
             )
-            after = _ref_snapshot(
-                git, after_history, after_sha, str(source), workspace / "head"
-            )
-        yield SnapshotPair(before, after, review, before.identity.commit_sha)
+            if changed_paths
+            else None
+        )
+        selection = (
+            PathSelection(prefixes, changed) if prefixes or changed_paths else None
+        )
+        before = _ref_snapshot(
+            git,
+            before_history,
+            before_sha,
+            before_target,
+            workspace / "base",
+            selection,
+        )
+        after = _ref_snapshot(
+            git, after_history, after_sha, after_target, workspace / "head", selection
+        )
+        base_lines, head_lines = changed_lines(
+            git, metadata_history, before_sha, after_sha, selection
+        )
+        yield SnapshotPair(before, after, review, before_sha, base_lines, head_lines)
